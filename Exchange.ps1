@@ -31,35 +31,41 @@ $ExchangeMailURL = "mail.otc.lab"
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 clear-host
 
-$dotnetFramework48 = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(0,3)
-If ($dotnetFramework48 -eq '4.8') {write-host ".net Framework 4.8 already installed" -ForegroundColor Green}
+
+$dotnetFramework48main = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(0,1)
+$dotnetFramework48rev = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(2,1)
+If ($dotnetFramework48main -eq '4' -and $dotnetFramework48rev -gt 7) {write-host ".net Framework 4.8 already installed" -ForegroundColor Green}
 Else {
       write-host "Installing .net Framework 4.8" -Foregroundcolor green
       start-process $ExchangePrereqPath"\ndp48-x86-x64-allos-enu.exe" -Wait -Argumentlist " /q /norestart"
      }
 
-$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*' 2>&1 | out-null
+####$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*' 2>&1 | out-null
+$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*' 
 If ($VisualC2012.count -eq '1') {write-host "Microsoft Visual C++ 2012 Redistributable (x64) already installed" -ForegroundColor Green}
 Else {
       write-host "Installing Visual C++ Redistributable for Visual Studio 2012 Update 4" -Foregroundcolor green
       start-process $ExchangePrereqPath"\vcredist_x64.exe" -Wait -Argumentlist "-silent"
      }
 
-$VisualC2013 = Get-Package -Name 'Microsoft Visual C++ 2013 Redistributable (x64)*' 2>&1 | out-null
+####$VisualC2013 = Get-Package -Name 'Microsoft Visual C++ 2013 Redistributable (x64)*' 2>&1 | out-null
+$VisualC2013 = Get-Package -Name 'Microsoft Visual C++ 2013 Redistributable (x64)*' 
 If ($VisualC2013.count -eq '1') {write-host "Microsoft Visual C++ 2013 Redistributable (x64) already installed" -ForegroundColor Green}
 Else {
       write-host "Installing Visual C++ Redistributable Package for Visual Studio 2013" -Foregroundcolor green
       start-process $ExchangePrereqPath"\vcredist_x64_2013.exe" -Wait -Argumentlist "-silent"
      }
 
-$IISURLRewrite = Get-Package -Name 'IIS URL Rewrite Module*' 2>&1 | out-null
+####$IISURLRewrite = Get-Package -Name 'IIS URL Rewrite Module*' 2>&1 | out-null
+$IISURLRewrite = Get-Package -Name 'IIS URL Rewrite Module*' 
 If ($IISURLRewrite.count -eq '1') {write-host "IIS URL Rewrite Module already installed" -ForegroundColor Green}
 Else {
       write-host "Installing URL Rewrite Module 2.1" -Foregroundcolor green
       start-process msiexec.exe -Wait -Argumentlist " /i $ExchangePrereqPath\rewrite_amd64_en-US.msi /qn"
      }
 
-$UCManagedAPI = Get-Package -Name 'Microsoft Server Speech Platform Runtime (x64)*' 2>&1 | out-null
+####$UCManagedAPI = Get-Package -Name 'Microsoft Server Speech Platform Runtime (x64)*' 2>&1 | out-null
+$UCManagedAPI = Get-Package -Name 'Microsoft Server Speech Platform Runtime (x64)*' 
 If ($IISURLRewrite.count -eq '1') {write-host "Unified Communications Managed API 4.0 Runtime already installed" -ForegroundColor Green}
 Else {
       write-host "Installing Unified Communications Managed API 4.0 Runtime" -Foregroundcolor green
@@ -99,7 +105,8 @@ Else {
       Start-Sleep -seconds 300
      }
 
-$Exchange = Get-Package -Name 'Microsoft Exchange Server' 2>&1 | out-null
+####$Exchange = Get-Package -Name 'Microsoft Exchange Server' 2>&1 | out-null
+$Exchange = Get-Package -Name 'Microsoft Exchange Server' 
 If ($Exchange.count -eq '1') {write-host "Microsoft Exchange Server already installed" -ForegroundColor Green}
 Else {
       write-host "Installing Exchange 2019" -Foregroundcolor green
