@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Installer version="1.0.0.0">
+  <Component Name="WindowsServer">
+	<Settings>
+		<Configuration Name="InstallShare" Value="C:\Install"/>
+		<Configuration Name="DomainName" Value="SATURN"/>
+		<Configuration Name="DomainDnsName" Value="saturn.lab"/>
+		<Configuration Name="DomainDistinguishedName" Value="DC=SATURN,DC=lab"/>
+		<Configuration Name="SxSStore" Value="source\WS2019\Sources\SxS"/>
+		<Configuration Name="SAT-SRV-11" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-12" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-13" Type="Features" Value="BitLocker,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-17" Type="Features" Value="ADCS-Cert-Authority,RSAT-AD-PowerShell,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-18" Type="Features" Value="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+	</Settings>
+  </Component>
+  <Component Name="PKI">
+	<Settings>
+		<Configuration Name="RootCA" Value="SAT-SRV-18"/>
+		<Configuration Name="CDP" Value="SAT-SRV-13"/>
+		<Configuration Name="IssuingCA" Value="SAT-SRV-17"/>
+		<Configuration Name="PkiFolder" Value="C:\inetpub\PKI"/>
+		<Configuration Name="CertReqLocation" Value="C:\PKIData\REQ"/>
+		<Configuration Name="CertDB" Value="C:\PKIData\Database"/>
+		<Configuration Name="ApprovedCertLocation" Value="C:\PKIData\CERT"/>
+		<Configuration Name="CertCRLLocation" Value="C:\PKIData\CRL"/>
+		<Configuration Name="CryptoProviderName" Value="RSA#Microsoft Software Key Storage Provider"/>
+		<Configuration Name="KeyLength" Value="4096"/>
+		<Configuration Name="HashAlgorithmName" Value="SHA512"/>
+	</Settings>
+  </Component>
+</Installer>
