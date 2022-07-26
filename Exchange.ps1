@@ -29,6 +29,10 @@ $ExchangeMailURL = "mail.otc.lab"
 ###         Download Latest Exchange 
 ###             See   https://docs.microsoft.com/en-us/exchange/new-features/build-numbers-and-release-dates?view=exchserver-2019#exchange-server-2019
 ###                   Place in Updates Folder under Exchange Server Source
+###
+###     Known post steps as of 7/26/2022
+###         Request and obtain certificate from certificate authority New-ExchangeCertificate, Enable-ExchangeCertificate
+###         Add product key Set-ExchangeServer <ServerName> -ProductKey <ProductKey>
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 clear-host
 

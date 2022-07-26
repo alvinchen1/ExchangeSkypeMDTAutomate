@@ -68,6 +68,26 @@ Else {
 
 break script
 
+C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe -noexit -command "cd $env:UserProfile; Write-Host 'Loading Modules for Skype for Business Server 2019...'; Import-Module 'C:\Program Files\Common Files\Skype for Business Server 2019\Modules\SkypeForBu
+import-module "C:\Program Files\Common Files\Skype for Business Server 2019\Modules\SkypeForBusiness\SkypeForBusiness.psd1"
+
+### Prepare Schema
+
+Install-CSAdServerSchema -Confirm:$false -Verbose -Report "C:\Users\otcadmin1.OTC\AppData\Local\Temp\2\Install-CSAdServerSchema-[2022_07_26][16_07_30].html"
+
+### Check  re: https://docs.microsoft.com/en-us/skypeforbusiness/schema-reference/active-directory-schema-extensions-classes-and-attributes/schema-changes
+### Check for 
+
+### Prepare Forest
+
+Enable-CSAdForest  -Verbose -Confirm:$false -Report "C:\Users\otcadmin1.OTC\AppData\Local\Temp\2\Enable-CSAdForest-[2022_07_26][16_10_39].html"
+
+### Prepare Domain
+
+Enable-CSAdDomain -Verbose -Confirm:$false -Report "C:\Users\otcadmin1.OTC\AppData\Local\Temp\2\Enable-CSAdDomain-[2022_07_26][16_11_31].html"
+
+###Add to  CSAdministrators and RTCUniversalServerAdmins
+
 
 ####$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*' 2>&1 | out-null
 #####$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*'
