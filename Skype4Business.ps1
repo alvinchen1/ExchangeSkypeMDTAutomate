@@ -88,6 +88,22 @@ Enable-CSAdDomain -Verbose -Confirm:$false -Report "C:\Users\otcadmin1.OTC\AppDa
 
 ###Add to  CSAdministrators and RTCUniversalServerAdmins
 
+####Install Admin Tools
+##### \\oct-adc-001\Share\Skype4Business\Setup\amd64\Setup\admin\admintools.msi
+
+Bootstrap-CsComputer
+
+#####Topology
+####Create File Share \\OCT-EXH-002.otc.lab\CSShare
+####Log off and back on after RTCUniversalServerAdmins?
+####Install-CSDatabase
+
+
+########Prepare first Standard edition server 
+Bootstrap-CsComputer
+
+#####Install Local Configuration Store
+Bootstrap-CsComputer
 
 ####$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*' 2>&1 | out-null
 #####$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*'
