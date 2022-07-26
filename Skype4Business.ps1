@@ -50,6 +50,25 @@ Else {
       start-process $Skype4BusinessPrereqPath"\ndp48-x86-x64-allos-enu.exe" -Wait -Argumentlist " /q /norestart"
      }
 
+$WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
+If ($WindowsFeature.count -gt '45') {write-host "Windows Server prerequisites already installed" -ForegroundColor Green}
+Else {
+      write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
+      Add-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net, Web-Net-Ext, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service
+     }
+
+$BootStrapCore = Get-Package | where {$_.Name -like "Skype for Business Server 2019*"}
+If ($VisualC2012.count -eq '0') {
+      write-host "Installing Skype for Business Server Core installed" -ForegroundColor Green
+      start-process $Skype4BusinessPath"\Setup\amd64\setup.exe" -Wait -Argumentlist "/bootstrapcore"
+      }
+Else {
+      write-host "Skype for Business Server detected, skipping  bootstrap core" -Foregroundcolor green
+     }
+
+break script
+
+
 ####$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*' 2>&1 | out-null
 #####$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*'
 $VisualC2012 = Get-Package | where {$_.Name -like "Microsoft Visual C++ 2012 Redistributable (x64)*"}
