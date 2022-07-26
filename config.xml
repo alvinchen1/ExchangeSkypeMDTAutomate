@@ -2,7 +2,7 @@
 <Installer version="1.0.0.0">
   <Component Name="WindowsServer">
 	<Settings>
-		<Configuration Name="InstallShare" Value="C:\Install"/>
+		<Configuration Name="InstallShare" Value="\\SAT-SRV-11\DeploymentShare$"/>
 		<Configuration Name="DomainName" Value="SATURN"/>
 		<Configuration Name="DomainDnsName" Value="saturn.lab"/>
 		<Configuration Name="DomainDistinguishedName" Value="DC=SATURN,DC=lab"/>
