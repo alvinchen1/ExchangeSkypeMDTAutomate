@@ -1,0 +1,147 @@
+$Windows2019SourcePath = "\\oct-adc-001\share\WindowsServer2019\sources"
+$ExchangePrereqPath = "\\oct-adc-001\share\ExchangePrereqs"
+$ExchangePath = "\\oct-adc-001\share\Exchange"
+$TargetExchangePath = 'E:\Microsoft\ExchangeServer\V15'
+$ExchangeOrgName = "OTC"
+$ExchangeMailURL = "mail.otc.lab"
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+###
+###    Alvin Chen
+###    Install Exchange 2019
+###    Prerequisites, a file share, AD joined, IP addressed, Schema Admins, Enterprise Admins, Exchange Drive
+###
+###    Prerequisties as of 7/15/2022
+###         https://docs.microsoft.com/en-us/exchange/plan-and-deploy/prerequisites?view=exchserver-2019
+###         Download .net Framework 4.8:  
+###                  https://go.microsoft.com/fwlink/?linkid=2088631
+###             See   https://support.microsoft.com/en-us/topic/microsoft-net-framework-4-8-offline-installer-for-windows-9d23f658-3b97-68ab-d013-aa3c3e7495e0
+###         Download Visual C++ Redistributable for Visual Studio 2012 Update 4: 
+###                  https://www.microsoft.com/download/details.aspx?id=30679
+###         Download Visual C++ Redistributable Package for Visual Studio 2013
+###                  https://aka.ms/highdpimfc2013x64enu 2013, rename to 
+###             See https://support.microsoft.com/en-us/topic/update-for-
+###         Download URL Rewrite Module 2.1: 
+###                  https://download.microsoft.com/download/1/2/8/128E2E22-C1B9-44A4-BE2A-5859ED1D4592/rewrite_amd64_en-US.msi
+###             See   https://www.iis.net/downloads/microsoft/url-rewrite#additionalDownloads
+###         Download Unified Communications Managed API 4.0 Runtime 
+###                  https://www.microsoft.com/en-us/download/details.aspx?id=34992 visual-c-2013-redistributable-package-d8ccd6a5-4e26-c290-517b-8da6cfdf4f10
+###         Download Latest Exchange 
+###             See   https://docs.microsoft.com/en-us/exchange/new-features/build-numbers-and-release-dates?view=exchserver-2019#exchange-server-2019
+###                   Place in Updates Folder under Exchange Server Source
+###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+clear-host
+
+$dotnetFramework48 = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(0,3)
+If ($dotnetFramework48 -eq '4.8') {write-host ".net Framework 4.8 already installed" -ForegroundColor Green}
+Else {
+      write-host "Installing .net Framework 4.8" -Foregroundcolor green
+      start-process $ExchangePrereqPath"\ndp48-x86-x64-allos-enu.exe" -Wait -Argumentlist " /q /norestart"
+     }
+
+$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*' 2>&1 | out-null
+If ($VisualC2012.count -eq '1') {write-host "Microsoft Visual C++ 2012 Redistributable (x64) already installed" -ForegroundColor Green}
+Else {
+      write-host "Installing Visual C++ Redistributable for Visual Studio 2012 Update 4" -Foregroundcolor green
+      start-process $ExchangePrereqPath"\vcredist_x64.exe" -Wait -Argumentlist "-silent"
+     }
+
+$VisualC2013 = Get-Package -Name 'Microsoft Visual C++ 2013 Redistributable (x64)*' 2>&1 | out-null
+If ($VisualC2013.count -eq '1') {write-host "Microsoft Visual C++ 2013 Redistributable (x64) already installed" -ForegroundColor Green}
+Else {
+      write-host "Installing Visual C++ Redistributable Package for Visual Studio 2013" -Foregroundcolor green
+      start-process $ExchangePrereqPath"\vcredist_x64_2013.exe" -Wait -Argumentlist "-silent"
+     }
+
+$IISURLRewrite = Get-Package -Name 'IIS URL Rewrite Module*' 2>&1 | out-null
+If ($IISURLRewrite.count -eq '1') {write-host "IIS URL Rewrite Module already installed" -ForegroundColor Green}
+Else {
+      write-host "Installing URL Rewrite Module 2.1" -Foregroundcolor green
+      start-process msiexec.exe -Wait -Argumentlist " /i $ExchangePrereqPath\rewrite_amd64_en-US.msi /qn"
+     }
+
+$UCManagedAPI = Get-Package -Name 'Microsoft Server Speech Platform Runtime (x64)*' 2>&1 | out-null
+If ($IISURLRewrite.count -eq '1') {write-host "Unified Communications Managed API 4.0 Runtime already installed" -ForegroundColor Green}
+Else {
+      write-host "Installing Unified Communications Managed API 4.0 Runtime" -Foregroundcolor green
+      start-process $ExchangePrereqPath"\UcmaRuntimeSetup.exe" -Wait -Argumentlist "/passive /norestart"
+     }
+
+$WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
+If ($WindowsFeature.count -gt '45') {write-host "Windows Server prerequisites already installed" -ForegroundColor Green}
+Else {
+      write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
+      Install-WindowsFeature Server-Media-Foundation, NET-Framework-45-Features, RPC-over-HTTP-proxy, RSAT-Clustering, RSAT-Clustering-CmdInterface, RSAT-Clustering-Mgmt, RSAT-Clustering-PowerShell, WAS-Process-Model, Web-Asp-Net45, Web-Basic-Auth, Web-Client-Auth, Web-Digest-Auth, Web-Dir-Browsing, Web-Dyn-Compression, Web-Http-Errors, Web-Http-Logging, Web-Http-Redirect, Web-Http-Tracing, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Lgcy-Mgmt-Console, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, Web-Static-Content, Web-Windows-Auth, Web-WMI, Windows-Identity-Foundation, RSAT-ADDS, RSAT-AD-PowerShell -Source $Windows2019SourcePath
+     }
+
+
+####
+####  Reboot needed here
+####
+
+$LDAPDomain = (get-addomain).DistinguishedName
+$ExchangeSchemaLocation = 'AD:\CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,'+$LDAPDomain
+$ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
+If ($ADSchema.rangeUpper -gt '16999') {write-host "Active Directory Schema already extended for Exchange 2019" -ForegroundColor Green}
+Else {
+      write-host "Extending Active Directory Schema" -Foregroundcolor green
+      start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /ps"
+      write-host "Pausing for Schema replication" -Foregroundcolor green
+      Start-Sleep -seconds 300
+     }
+
+$ADExchangePrepped = "AD:\CN=Microsoft Exchange System Objects," + $LDAPDomain
+$ADExchangePreppedobjversion = Get-ItemProperty $ADExchangePrepped -Name objectVersion
+If ($ADExchangePreppedobjversion.objectVersion -gt '13230') {write-host "Active Directory already Prepared for Exchange 2019" -ForegroundColor Green}
+Else {
+      write-host "Preparing Active Directory" -Foregroundcolor green
+      start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /PrepareAD       /OrganizationName:$ExchangeOrgName"
+      write-host "Pausing for Active Directory replication" -Foregroundcolor green
+      Start-Sleep -seconds 300
+     }
+
+$Exchange = Get-Package -Name 'Microsoft Exchange Server' 2>&1 | out-null
+If ($Exchange.count -eq '1') {write-host "Microsoft Exchange Server already installed" -ForegroundColor Green}
+Else {
+      write-host "Installing Exchange 2019" -Foregroundcolor green
+      start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /TargetDir:$TargetExchangePath /CustomerFeedbackEnabled:False /Mode:install /Roles:mb"
+     }
+
+$TargetExchangePSPath = $TargetExchangePath + "\bin\RemoteExchange.ps1"
+Write-Host $TargetExchangePSPath 
+Import-Module $TargetExchangePSPath; Connect-ExchangeServer -auto -ClientApplication:ManagementShell
+
+####Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
+####Connect-ExchangeServer -auto -ClientApplication:ManagementShell
+get-mailbox
+####Obtain Certificate
+Get-OwaVirtualDirectory
+Get-EcpVirtualDirectory
+Get-ActiveSyncVirtualDirectory
+Get-OabVirtualDirectory
+Get-WebServicesVirtualDirectory
+Get-OutlookAnywhere
+Get-PowerShellVirtualDirectory
+Get-ClientAccessService
+Get-MapiVirtualDirectory
+
+
+#Adapted from https://gist.github.com/altrive/5329377
+#Based on <https://gallery.technet.microsoft.com/scriptcenter/Get-PendingReboot-Query-bdb79542>
+function Test-PendingReboot
+{
+ if (Get-ChildItem "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" -EA Ignore) { return $true }
+ if (Get-Item "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" -EA Ignore) { return $true }
+ if (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA Ignore) { return $true }
+ try { 
+   $util = [wmiclass]"\\.\root\ccm\clientsdk:CCM_ClientUtilities"
+   $status = $util.DetermineIfRebootPending()
+   if(($status -ne $null) -and $status.RebootPending){
+     return $true
+   }
+ }catch{}
+
+ return $false
+}
+
+
+
