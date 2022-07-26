@@ -8,7 +8,8 @@ $ExchangeMailURL = "mail.otc.lab"
 ###
 ###    Alvin Chen
 ###    Install Exchange 2019
-###    Prerequisites, a file share, AD joined, IP addressed, Schema Admins, Enterprise Admins, Exchange Drive, all variables above set
+###    Prerequisites, a file share, AD joined, IP addressed, Schema Admins, Enterprise Admins, Exchange Drive, all variables above set, 
+###         DNS name resolution for ExchangeMailURL
 ###
 ###    Prerequisties as of 7/15/2022
 ###         https://docs.microsoft.com/en-us/exchange/plan-and-deploy/prerequisites?view=exchserver-2019
@@ -102,22 +103,24 @@ Else {
 
 
 ####
-####  Check is ADPS Module is installed before proceeding with Schema check
+####  Check is ADPS Module is installed before proceeding with Schema check, currently not working consistently, will attempt to update ####       schema when get-addomain fails
 ####
+get-addomain 2>&1 | out-null
 $ADPSModule = get-module | ? {$_.Name -eq "ActiveDirectory"}
 IF ($ADPSModule.count -eq '1') 
        {
        $LDAPDomain = (get-addomain).DistinguishedName
        $ExchangeSchemaLocation = 'AD:\CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,'+$LDAPDomain
        $ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
-       If ($ADSchema.rangeUpper -gt '16999') {write-host "Active Directory Schema already extended for Exchange 2019" -ForegroundColor Green}
-       Else {
+       If ($ADSchema.rangeUpper -lt '16999') {
              write-host "Extending Active Directory Schema" -Foregroundcolor green
              start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /ps"
              write-host "Pausing for Schema replication" -Foregroundcolor green
              Start-Sleep -seconds 300
             }
+       Else {write-host "Active Directory Schema already extended for Exchange 2019" -ForegroundColor Green}
        }
+Else {write-host "Active Directory PowerShell not detected, skipping Schema check" -ForegroundColor Red}
 
 $ADExchangePrepped = "AD:\CN=Microsoft Exchange System Objects," + $LDAPDomain
 $ADExchangePreppedobjversion = Get-ItemProperty $ADExchangePrepped -Name objectVersion
@@ -138,7 +141,7 @@ Else {
       start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /TargetDir:$TargetExchangePath /CustomerFeedbackEnabled:False /Mode:install /Roles:mb"
      }
 
-$TargetExchangePath = 'E:\Program,Files\Microsoft\Exchange,Server\v15'
+#####$TargetExchangePath = 'E:\Program,Files\Microsoft\Exchange,Server\v15'
 #####Fix for first bad servers
 
 $TargetExchangePSPath = $TargetExchangePath + "\bin\RemoteExchange.ps1"
@@ -148,17 +151,75 @@ Connect-ExchangeServer -auto -ClientApplication:ManagementShell
 
 ####Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
 ####Connect-ExchangeServer -auto -ClientApplication:ManagementShell
-get-mailbox
 ####Obtain Certificate
-Get-OwaVirtualDirectory
-Get-EcpVirtualDirectory
-Get-ActiveSyncVirtualDirectory
-Get-OabVirtualDirectory
-Get-WebServicesVirtualDirectory
-Get-OutlookAnywhere
-Get-PowerShellVirtualDirectory
-Get-ClientAccessService
-Get-MapiVirtualDirectory
+
+Write-Host 'Getting OWA Virtual Directories' -ForegroundColor Green
+Get-OwaVirtualDirectory | fl InternalURL,ExternalURL
+Write-Host 'Setting OWA Virtual Directories' -ForegroundColor Yellow
+Get-OwaVirtualDirectory | set-OwaVirtualDirectory -InternalURL https://$ExchangeMailURL/owa  -ExternalURL https://$ExchangeMailURL/owa
+Write-Host 'New OWA Virtual Directories' -ForegroundColor Red
+Get-OwaVirtualDirectory | fl InternalURL,ExternalURL
+
+Write-Host 'Getting ECP Virtual Directories' -ForegroundColor Green
+Get-EcpVirtualDirectory | fl InternalURL,ExternalURL
+Write-Host 'Setting ECP Virtual Directories' -ForegroundColor Yellow
+Get-EcpVirtualDirectory | Set-EcpVirtualDirectory -InternalURL https://$ExchangeMailURL/ecp  -ExternalURL https://$ExchangeMailURL/ecp
+Write-Host 'New ECP Virtual Directories' -ForegroundColor Red
+Get-EcpVirtualDirectory | fl InternalURL,ExternalURL
+
+Write-Host 'Getting ActiveSync Virtual Directories' -ForegroundColor Green
+Get-ActiveSyncVirtualDirectory | fl InternalURL,ExternalURL
+Write-Host 'Setting AciveSync Virtual Directories' -ForegroundColor Yellow
+Get-ActiveSyncVirtualDirectory | set-ActiveSyncVirtualDirectory -InternalURL https://$ExchangeMailURL/Microsoft-Server-ActiveSync  -ExternalURL https://$ExchangeMailURL/Microsoft-Server-ActiveSync
+Write-Host 'New ActiveSync Virtual Directories' -ForegroundColor Red
+Get-ActiveSyncVirtualDirectory | fl InternalURL,ExternalURL
+
+Write-Host 'Getting OAB Virtual Directories' -ForegroundColor Green
+Get-OabVirtualDirectory | fl InternalURL,ExternalURL
+Write-Host 'Setting OAB Virtual Directories' -ForegroundColor Yellow
+Get-OabVirtualDirectory | Set-OabVirtualDirectory -InternalURL https://$ExchangeMailURL/OAB  -ExternalURL https://$ExchangeMailURL/OAB
+Write-Host 'New OAB Virtual Directories' -ForegroundColor Red
+Get-OabVirtualDirectory | fl InternalURL,ExternalURL
+
+Write-Host 'Getting WebServices Virtual Directories' -ForegroundColor Green
+Get-WebServicesVirtualDirectory | fl InternalURL,ExternalURL
+Write-Host 'Setting WebServices Virtual Directories' -ForegroundColor Yellow
+Get-WebServicesVirtualDirectory | Set-WebServicesVirtualDirectory -InternalURL https://$ExchangeMailURL/EWS/Exchange.asmx -ExternalURL https://$ExchangeMailURL/EWS/Exchange.asmx -force
+Write-Host 'New WebServices Virtual Directories' -ForegroundColor Red
+Get-WebServicesVirtualDirectory | fl InternalURL,ExternalURL
+
+Write-Host 'Getting OutlookAnywhere Host Name' -ForegroundColor Green
+Get-OutlookAnywhere | fl Internalhostname,Externalhostname
+Write-Host 'Setting OutlookAnywhere Host Name' -ForegroundColor Yellow
+Get-OutlookAnywhere | Set-OutlookAnywhere -Internalhostname $ExchangeMailURL -Externalhostname $ExchangeMailURL -InternalClientsRequireSsl $true -ExternalClientsRequireSsl $true -DefaultAuthenticationMethod NTLM
+Write-Host 'New OutlookAnywhere Host Name' -ForegroundColor Red
+Get-OutlookAnywhere | fl Internalhostname,Externalhostname
+
+####No longer needed?
+####Write-Host 'Getting PowerShell Virtual Directories' -ForegroundColor Green
+####Get-PowerShellVirtualDirectory | fl InternalURL,ExternalURL
+####Write-Host 'Setting PowerShell Virtual Directories' -ForegroundColor Yellow
+####Get-PowerShellVirtualDirectory | Set-EcpVirtualDirectory -InternalURL https://$ExchangeMailURL/powershell -ExternalURL https://####$ExchangeMailURL/powershell
+####Write-Host 'New PowerShell Virtual Directories' -ForegroundColor Red
+####Get-PowerShellVirtualDirectory | fl InternalURL,ExternalURL
+
+####No longer needed?
+####Write-Host 'Getting Client Access Array' -ForegroundColor Green
+####Get-ClientAccessService | fl ClientAccessArray
+####Write-Host 'Setting Client Access Array' -ForegroundColor Yellow
+####Get-ClientAccessService | Set-ClientAccessService -ClientAccessArray $ExchangeMailURL
+####Write-Host 'New Client Access Array' -ForegroundColor Red
+####Get-ClientAccessService | fl ClientAccessArray
+
+Write-Host 'Getting MAPI Virtual Directories' -ForegroundColor Green
+Get-MapiVirtualDirectory | fl InternalURL,ExternalURL
+Write-Host 'Setting MAPI Virtual Directories' -ForegroundColor Yellow
+Get-MapiVirtualDirectory | Set-MapiVirtualDirectory -InternalURL https://$ExchangeMailURL/mapi  -ExternalURL https://$ExchangeMailURL/mapi
+Write-Host 'New MAPI Virtual Directories' -ForegroundColor Red
+Get-MapiVirtualDirectory | fl InternalURL,ExternalURL
+
+
+
 
 
 
