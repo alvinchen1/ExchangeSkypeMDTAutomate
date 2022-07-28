@@ -9,7 +9,7 @@
 		<Configuration Name="SxSStore" Value="source\WS2019\Sources\SxS"/>
 		<Configuration Name="SAT-SRV-11" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
 		<Configuration Name="SAT-SRV-12" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="SAT-SRV-13" Type="Features" Value="BitLocker,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-16" Type="Features" Value="BitLocker,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert,SNMP-Service,SNMP-WMI-Provider"/>
 		<Configuration Name="SAT-SRV-17" Type="Features" Value="ADCS-Cert-Authority,RSAT-AD-PowerShell,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
 		<Configuration Name="SAT-SRV-18" Type="Features" Value="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
 	</Settings>
@@ -17,7 +17,7 @@
   <Component Name="PKI">
 	<Settings>
 		<Configuration Name="RootCA" Value="SAT-SRV-18"/>
-		<Configuration Name="CDP" Value="SAT-SRV-13"/>
+		<Configuration Name="CDP" Value="SAT-SRV-16"/>
 		<Configuration Name="IssuingCA" Value="SAT-SRV-17"/>
 		<Configuration Name="PkiFolder" Value="C:\inetpub\PKI"/>
 		<Configuration Name="CertReqLocation" Value="C:\PKIData\REQ"/>
