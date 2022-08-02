@@ -7,11 +7,11 @@
 		<Configuration Name="DomainDnsName" Value="saturn.lab"/>
 		<Configuration Name="DomainDistinguishedName" Value="DC=SATURN,DC=lab"/>
 		<Configuration Name="SxSStore" Value="source\WS2019\Sources\SxS"/>
-		<Configuration Name="SAT-SRV-11" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="SAT-SRV-12" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="SAT-SRV-16" Type="Features" Value="BitLocker,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="SAT-SRV-17" Type="Features" Value="ADCS-Cert-Authority,RSAT-AD-PowerShell,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="SAT-SRV-18" Type="Features" Value="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-11" Host="Admin"   AdditionalDataDisks="0" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-12" Host="Cluster" AdditionalDataDisks="0" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-16" Host="Cluster" AdditionalDataDisks="1" Type="Features" Value="BitLocker,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-17" Host="Cluster" AdditionalDataDisks="2" Type="Features" Value="ADCS-Cert-Authority,RSAT-AD-PowerShell,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-18" Host="Cluster" AdditionalDataDisks="3" Type="Features" Value="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
 	</Settings>
   </Component>
   <Component Name="PKI">
