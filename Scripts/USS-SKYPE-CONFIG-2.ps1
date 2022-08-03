@@ -1,7 +1,41 @@
-$Windows2019SourcePath = "\\oct-adc-001\share\WindowsServer2019\sources"
-$Skype4BusinessPrereqPath = "\\oct-adc-001\share\Skype4BusinessPrereqs"
-$Skype4BusinessPath = "\\oct-adc-001\share\Skype4Business"
-$Skype4BusinessCU = "\\oct-adc-001\share\Skype4BusinessCU"
+<#
+NAME
+    USS-SKYPE-CONFIG-2.ps1
+
+SYNOPSIS
+    Installs Skype For Business in the AD domain
+
+SYNTAX
+    .\$ScriptName
+ #>
+
+Start-Transcript
+
+# Declare Variables
+# -----------------------------------------------------------------------------
+$ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
+$ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
+$RootDir = Split-Path $ScriptDir –Parent
+$ConfigFile = "$RootDir\config.xml"
+
+# Load variables from config.xml
+If (!(Test-Path -Path $ConfigFile)) 
+{
+    Write-Host "Missing configuration file $ConfigFile" -ForegroundColor Red
+    Stop-Transcript
+    Exit
+}
+$XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
+$WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
+$Windows2019SourcePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\W2019\sources"
+$Skype4BusinessPrereqPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Skype4BusinessPrereqs"
+$Skype4BusinessPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Skype4Business"
+$SkypeForBusiness = ($XML.Component | ? {($_.Name -eq "SkypeForBusiness")}).Settings.Configuration
+
+###$Windows2019SourcePath = "\\oct-adc-001\share\WindowsServer2019\sources"
+###$Skype4BusinessPrereqPath = "\\oct-adc-001\share\Skype4BusinessPrereqs"
+###$Skype4BusinessPath = "\\oct-adc-001\share\Skype4Business"
+###$Skype4BusinessCU = "\\oct-adc-001\share\Skype4BusinessCU"
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ###
 ###    Alvin Chen
@@ -22,6 +56,10 @@ $Skype4BusinessCU = "\\oct-adc-001\share\Skype4BusinessCU"
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 clear-host
 
+# =============================================================================
+# FUNCTIONS
+# =============================================================================
+
 #Adapted from https://gist.github.com/altrive/5329377
 #Based on <https://gallery.technet.microsoft.com/scriptcenter/Get-PendingReboot-Query-bdb79542>
 function Test-PendingReboot
@@ -39,6 +77,12 @@ function Test-PendingReboot
 
  return $false
 }
+
+
+# =============================================================================
+# MAIN ROUTINE
+# =============================================================================
+
 
 $dotnetFramework48main = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(0,1)
 $dotnetFramework48rev = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(2,1)
@@ -66,6 +110,8 @@ Else {
 
 break script
 
+
+####C:\Program Files\Skype for Business Server 2019\Deployment
 C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe -noexit -command "cd $env:UserProfile; Write-Host 'Loading Modules for Skype for Business Server 2019...'; Import-Module 'C:\Program Files\Common Files\Skype for Business Server 2019\Modules\SkypeForBu
 import-module "C:\Program Files\Common Files\Skype for Business Server 2019\Modules\SkypeForBusiness\SkypeForBusiness.psd1"
 

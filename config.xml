@@ -29,4 +29,16 @@
 		<Configuration Name="HashAlgorithmName" Value="SHA512"/>
 	</Settings>
   </Component>
+  <Component Name="Exchange">
+	<Settings>
+		<Configuration Name="TargetExchangePath" Value="E:\Microsoft\ExchangeServer\V15"/>
+		<Configuration Name="ExchangeOrgName" Value="OTC"/>
+		<Configuration Name="ExchangeMailURL" Value="mail.otc.lab"/>
+	</Settings>
+  </Component>
+  <Component Name="SkypeForBusiness">
+	<Settings>
+		<Configuration Name="HashAlgorithmName" Value="SHA512"/>
+	</Settings>
+  </Component>
 </Installer>
