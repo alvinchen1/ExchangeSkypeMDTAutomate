@@ -1,9 +1,46 @@
-$Windows2019SourcePath = "\\oct-adc-001\share\WindowsServer2019\sources"
-$ExchangePrereqPath = "\\oct-adc-001\share\ExchangePrereqs"
-$ExchangePath = "\\oct-adc-001\share\Exchange"
-$TargetExchangePath = 'E:\Microsoft\ExchangeServer\V15'
-$ExchangeOrgName = "OTC"
-$ExchangeMailURL = "mail.otc.lab"
+<#
+NAME
+    USS-EXCHG-CONFIG-2.ps1
+
+SYNOPSIS
+    Installs Exchange Server 2019 in the AD domain
+
+SYNTAX
+    .\$ScriptName
+ #>
+
+Start-Transcript
+
+# Declare Variables
+# -----------------------------------------------------------------------------
+$ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
+$ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
+$RootDir = Split-Path $ScriptDir –Parent
+$ConfigFile = "$RootDir\config.xml"
+
+# Load variables from config.xml
+If (!(Test-Path -Path $ConfigFile)) 
+{
+    Write-Host "Missing configuration file $ConfigFile" -ForegroundColor Red
+    Stop-Transcript
+    Exit
+}
+$XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
+$Exchange = ($XML.Component | ? {($_.Name -eq "Exchange")}).Settings.Configuration
+$TargetExchangePath = ($Exchange | ? {($_.Name -eq "TargetExchangePath")}).Value
+$ExchangeOrgName = ($Exchange | ? {($_.Name -eq "ExchangeOrgName")}).Value
+$ExchangeMailURL = ($Exchange | ? {($_.Name -eq "ExchangeMailURL")}).Value
+$WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
+$Windows2019SourcePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\W2019\sources"
+$ExchangePrereqPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\ExchangePrereqs"
+$ExchangePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Exchange"
+
+###$Windows2019SourcePath = "\\oct-adc-001\share\WindowsServer2019\sources"
+###$ExchangePrereqPath = "\\oct-adc-001\share\ExchangePrereqs"
+###$ExchangePath = "\\oct-adc-001\share\Exchange"
+###$TargetExchangePath = 'E:\Microsoft\ExchangeServer\V15'
+###$ExchangeOrgName = "OTC"
+###$ExchangeMailURL = "mail.otc.lab"
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ###
 ###    Alvin Chen
@@ -38,6 +75,10 @@ $ExchangeMailURL = "mail.otc.lab"
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 clear-host
 
+# =============================================================================
+# FUNCTIONS
+# =============================================================================
+
 #Adapted from https://gist.github.com/altrive/5329377
 #Based on <https://gallery.technet.microsoft.com/scriptcenter/Get-PendingReboot-Query-bdb79542>
 function Test-PendingReboot
@@ -55,6 +96,12 @@ function Test-PendingReboot
 
  return $false
 }
+
+
+# =============================================================================
+# MAIN ROUTINE
+# =============================================================================
+
 
 $dotnetFramework48main = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(0,1)
 $dotnetFramework48rev = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(2,1)
