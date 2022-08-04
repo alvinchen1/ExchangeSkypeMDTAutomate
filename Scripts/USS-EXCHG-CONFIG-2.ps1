@@ -9,7 +9,13 @@ SYNTAX
     .\$ScriptName
  #>
 
-Start-Transcript
+
+###################################################################################################
+### Start-Transcript
+# Stop-Transcript
+# Overwrite existing log.
+Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-EXCHG-CONFIG-1.log
+Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-EXCHG-CONFIG-1.log
 
 # Declare Variables
 # -----------------------------------------------------------------------------
@@ -33,14 +39,17 @@ $ExchangeMailURL = ($Exchange | ? {($_.Name -eq "ExchangeMailURL")}).Value
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
 $Windows2019SourcePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\W2019\sources"
 $ExchangePrereqPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\ExchangePrereqs"
+$DOTNETFRAMEWORKPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\DOTNETFRAMEWORK_4.8"
 $ExchangePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Exchange"
+$LDAPDomain = ($WS | ? {($_.Name -eq "DomainDistinguishedName")}).Value
+$CertTemplate = ($WS | ? {($_.Name -eq "DomainName")}).Value + "WebServer"
+$OWAVirtualDirectory = "https://" + $ExchangeMailURL + "/owa"
+$ECPVirtualDirectory = "https://" + $ExchangeMailURL + "/ecp"
+$OABVirtualDirectory = "https://" + $ExchangeMailURL + "/OAB"
+$MAPIVirtualDirectory = "https://" + $ExchangeMailURL + "/mapi"
+$ActiveSyncVirtualDirectory = "https://" + $ExchangeMailURL + "/Microsoft-Server-ActiveSync"
+$WebServicesVirtualDirectory = "https://" + $ExchangeMailURL + "/EWS/Exchange.asmx"
 
-###$Windows2019SourcePath = "\\oct-adc-001\share\WindowsServer2019\sources"
-###$ExchangePrereqPath = "\\oct-adc-001\share\ExchangePrereqs"
-###$ExchangePath = "\\oct-adc-001\share\Exchange"
-###$TargetExchangePath = 'E:\Microsoft\ExchangeServer\V15'
-###$ExchangeOrgName = "OTC"
-###$ExchangeMailURL = "mail.otc.lab"
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ###
 ###    Alvin Chen
@@ -53,16 +62,21 @@ $ExchangePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Exchange"
 ###         Download .net Framework 4.8:  
 ###                  https://go.microsoft.com/fwlink/?linkid=2088631
 ###             See   https://support.microsoft.com/en-us/topic/microsoft-net-framework-4-8-offline-installer-for-windows-9d23f658-3b97-68ab-d013-aa3c3e7495e0
+###                   Place in DOTNETFRAMEWORK_4.8
 ###         Download Visual C++ Redistributable for Visual Studio 2012 Update 4: 
 ###                  https://www.microsoft.com/download/details.aspx?id=30679
+###                   Place in ExchangePrereqs
 ###         Download Visual C++ Redistributable Package for Visual Studio 2013
 ###                  https://aka.ms/highdpimfc2013x64enu, rename to vcredist_x64_2013.exe
 ###             See https://support.microsoft.com/en-us/topic/update-for-visual-c-2013-redistributable-package-d8ccd6a5-4e26-c290-517b-8da6cfdf4f10
+###                   Place in ExchangePrereqs
 ###         Download URL Rewrite Module 2.1: 
 ###                  https://download.microsoft.com/download/1/2/8/128E2E22-C1B9-44A4-BE2A-5859ED1D4592/rewrite_amd64_en-US.msi
 ###             See   https://www.iis.net/downloads/microsoft/url-rewrite#additionalDownloads
+###                   Place in ExchangePrereqs
 ###         Download Unified Communications Managed API 4.0 Runtime 
 ###                  https://www.microsoft.com/en-us/download/details.aspx?id=34992 
+###                   Place in ExchangePrereqs
 ###         Download Latest Exchange 
 ###             See   https://docs.microsoft.com/en-us/exchange/new-features/updates?view=exchserver-2019
 ###                   Find the latest blog post
@@ -102,13 +116,19 @@ function Test-PendingReboot
 # MAIN ROUTINE
 # =============================================================================
 
+$WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
+If ($WindowsFeature.count -gt '33') {write-host "Windows Server prerequisites already installed" -ForegroundColor Green}
+Else {
+      write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
+      Install-WindowsFeature Server-Media-Foundation, NET-Framework-45-Features, RPC-over-HTTP-proxy, RSAT-Clustering, RSAT-Clustering-CmdInterface, RSAT-Clustering-Mgmt, RSAT-Clustering-PowerShell, WAS-Process-Model, Web-Asp-Net45, Web-Basic-Auth, Web-Client-Auth, Web-Digest-Auth, Web-Dir-Browsing, Web-Dyn-Compression, Web-Http-Errors, Web-Http-Logging, Web-Http-Redirect, Web-Http-Tracing, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Lgcy-Mgmt-Console, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, Web-Static-Content, Web-Windows-Auth, Web-WMI, Windows-Identity-Foundation, RSAT-ADDS, RSAT-AD-PowerShell -Source $Windows2019SourcePath
+     }
 
 $dotnetFramework48main = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(0,1)
 $dotnetFramework48rev = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(2,1)
 If ($dotnetFramework48main -eq '4' -and $dotnetFramework48rev -gt 7) {write-host ".net Framework 4.8 already installed" -ForegroundColor Green}
 Else {
       write-host "Installing .net Framework 4.8" -Foregroundcolor green
-      start-process $ExchangePrereqPath"\ndp48-x86-x64-allos-enu.exe" -Wait -Argumentlist " /q /norestart"
+      start-process $DOTNETFRAMEWORKPath"\ndp48-x86-x64-allos-enu.exe" -Wait -Argumentlist " /q /norestart"
      }
 
 ####$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*' 2>&1 | out-null
@@ -147,132 +167,210 @@ Else {
       start-process $ExchangePrereqPath"\UcmaRuntimeSetup.exe" -Wait -Argumentlist "/passive /norestart"
      }
 
-$WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
-If ($WindowsFeature.count -gt '45') {write-host "Windows Server prerequisites already installed" -ForegroundColor Green}
-Else {
-      write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
-      Install-WindowsFeature Server-Media-Foundation, NET-Framework-45-Features, RPC-over-HTTP-proxy, RSAT-Clustering, RSAT-Clustering-CmdInterface, RSAT-Clustering-Mgmt, RSAT-Clustering-PowerShell, WAS-Process-Model, Web-Asp-Net45, Web-Basic-Auth, Web-Client-Auth, Web-Digest-Auth, Web-Dir-Browsing, Web-Dyn-Compression, Web-Http-Errors, Web-Http-Logging, Web-Http-Redirect, Web-Http-Tracing, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Lgcy-Mgmt-Console, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, Web-Static-Content, Web-Windows-Auth, Web-WMI, Windows-Identity-Foundation, RSAT-ADDS, RSAT-AD-PowerShell -Source $Windows2019SourcePath
-     }
-
-
 ####
 ####  Check is ADPS Module is installed before proceeding with Schema check, currently not working consistently, will attempt to update ####       schema when get-addomain fails
 ####
-get-addomain 2>&1 | out-null
+###get-addomain 2>&1 | out-null
+import-module ActiveDirectory 2>&1 | out-null
 $ADPSModule = get-module | ? {$_.Name -eq "ActiveDirectory"}
-IF ($ADPSModule.count -eq '1') 
-       {
-       $LDAPDomain = (get-addomain).DistinguishedName
-       $ExchangeSchemaLocation = 'AD:\CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,'+$LDAPDomain
-       $ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
-       If ($ADSchema.rangeUpper -lt '16999') {
-             write-host "Extending Active Directory Schema" -Foregroundcolor green
-             start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /ps"
-             write-host "Pausing for Schema replication" -Foregroundcolor green
-             Start-Sleep -seconds 300
+IF ($ADPSModule.count -eq '1') {
+       ####$LDAPDomain = (get-addomain).DistinguishedName
+       ###get-adobject -SearchBase "CN=Schema,CN=Configuration,DC=USS,DC=LOCAL" -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"}
+       $ADOSchemaLocation = 'CN=Schema,CN=Configuration,'+$LDAPDomain
+       IF (get-adobject -SearchBase $ADOSchemaLocation -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"} -eq 0) {
+           $ADSchemaLocation = 'AD:\CN=Schema,CN=Configuration,'+$LDAPDomain
+           $ExchangeSchemaLocation = 'AD:\CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,'+$LDAPDomain
+           $ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
+           If ($ADSchema.rangeUpper -lt '16999') {
+               write-host "Extending Active Directory Schema" -Foregroundcolor green
+               start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /ps"
+               write-host "Pausing for Schema replication" -Foregroundcolor green
+               Start-Sleep -seconds 300
             }
-       Else {write-host "Active Directory Schema already extended for Exchange 2019" -ForegroundColor Green}
        }
+       Else {write-host "Active Directory Schema already extended for Exchange 2019" -ForegroundColor Green}
+}
 Else {write-host "Active Directory PowerShell not detected, skipping Schema check" -ForegroundColor Red}
 
-$ADExchangePrepped = "AD:\CN=Microsoft Exchange System Objects," + $LDAPDomain
-$ADExchangePreppedobjversion = Get-ItemProperty $ADExchangePrepped -Name objectVersion
-If ($ADExchangePreppedobjversion.objectVersion -gt '13230') {write-host "Active Directory already Prepared for Exchange 2019" -ForegroundColor Green}
-Else {
-      write-host "Preparing Active Directory" -Foregroundcolor green
-      start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /PrepareAD       /OrganizationName:$ExchangeOrgName"
-      write-host "Pausing for Active Directory replication" -Foregroundcolor green
-      Start-Sleep -seconds 300
-     }
+####
+####   Check Active Directory Prep
+####
+
+import-module ActiveDirectory 2>&1 | out-null
+$ADPSModule = get-module | ? {$_.Name -eq "ActiveDirectory"}
+IF ($ADPSModule.count -eq '1') {
+       ####$LDAPDomain = (get-addomain).DistinguishedName
+       ###get-adobject -SearchBase "CN=Schema,CN=Configuration,DC=USS,DC=LOCAL" -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"}
+       $ADOSchemaLocation = 'CN=Schema,CN=Configuration,'+$LDAPDomain
+       IF (get-adobject -SearchBase $ADOSchemaLocation -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"} -eq 0) {
+           $ADSchemaLocation = 'AD:\CN=Schema,CN=Configuration,'+$LDAPDomain
+           $ExchangeSchemaLocation = 'AD:\CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,'+$LDAPDomain
+           $ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
+           If ($ADSchema.rangeUpper -lt '16999') {
+                 $ADExchangePrepped = "AD:\CN=Microsoft Exchange System Objects," + $LDAPDomain
+                 $ADExchangePreppedobjversion = Get-ItemProperty $ADExchangePrepped -Name objectVersion
+                 If ($ADExchangePreppedobjversion.objectVersion -gt '13230') {write-host "Active Directory already Prepared for Exchange 2019" -ForegroundColor Green}
+                 Else {
+                       start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /PrepareAD /OrganizationName:$ExchangeOrgName"
+                       write-host "Pausing for Active Directory replication" -Foregroundcolor green
+                       Start-Sleep -seconds 300
+                      }
+                 }
+
+           }
+       Else {write-host "Active Directory prepped already for Exchange 2019" -ForegroundColor Green}
+       }
+Else {write-host "Active Directory PowerShell not detected, skipping Active Directory prep" -ForegroundColor Red}
 
 ####$Exchange = Get-Package -Name 'Microsoft Exchange Server' 2>&1 | out-null
 ####$Exchange = Get-Package -Name 'Microsoft Exchange Server' 
 $Exchange = Get-Package  | ? {$_.Name -like "Microsoft Exchange Server"}
-If ($Exchange.count -eq '1') {write-host "Microsoft Exchange Server already installed" -ForegroundColor Green}
+If ($Exchange.count -eq '0' -and (Test-PendingReboot) -eq $false) {
+     write-host "Installing Exchange 2019" -Foregroundcolor green
+     start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /TargetDir:$TargetExchangePath /CustomerFeedbackEnabled:False /Mode:install /Roles:mb /OrganizationName:$ExchangeOrgName"
+     }
 Else {
-      write-host "Installing Exchange 2019" -Foregroundcolor green
-      start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /TargetDir:$TargetExchangePath /CustomerFeedbackEnabled:False /Mode:install /Roles:mb"
+     write-host "Microsoft Exchange Server already installed or reboot needed" -ForegroundColor Green
      }
 
-#####$TargetExchangePath = 'E:\Program,Files\Microsoft\Exchange,Server\v15'
-#####Fix for first bad servers
+$Exchange = Get-Package  | ? {$_.Name -like "Microsoft Exchange Server*"}
+If ($Exchange.count -gt '0') {
+     write-host "Checking for Exchange" -ForegroundColor Green
+     
+     $TargetExchangePSPath = $TargetExchangePath + "\bin\RemoteExchange.ps1"
+     Import-Module $TargetExchangePSPath
+     Connect-ExchangeServer -auto -ClientApplication:ManagementShell
 
-$TargetExchangePSPath = $TargetExchangePath + "\bin\RemoteExchange.ps1"
-Write-Host $TargetExchangePSPath 
-Import-Module $TargetExchangePSPath
-Connect-ExchangeServer -auto -ClientApplication:ManagementShell
+     ####Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
+     ####Connect-ExchangeServer -auto -ClientApplication:ManagementShell
+     ####Obtain Certificate
+     Write-Host 'Checking OWA Virtual Directories InternalURL' -ForegroundColor Green
+     If ((Get-OwaVirtualDirectory | ? {$_.InternalURL -notlike $OWAVirtualDirectory}).count -gt 0) {
+          Get-OwaVirtualDirectory | ? {$_.InternalURL -notlike $OWAVirtualDirectory} | fl InternalURL
+          Write-Host 'Setting OWA Virtual Directories InternalURL' -ForegroundColor Yellow
+          Get-OwaVirtualDirectory | ? {$_.InternalURL -notlike $OWAVirtualDirectory} | set-OwaVirtualDirectory -InternalURL $OWAVirtualDirectory
+          Write-Host 'New OWA Virtual Directories InternalURL' -ForegroundColor Red
+          Get-OwaVirtualDirectory | fl InternalURL
+     }
+     Write-Host 'Checking OWA Virtual Directories ExternalURL' -ForegroundColor Green
+     If ((Get-OwaVirtualDirectory | ? {$_.ExternalURL -notlike $OWAVirtualDirectory}).count -gt 0) {
+          Get-OwaVirtualDirectory | ? {$_.ExternalURL -notlike $OWAVirtualDirectory} | fl ExternalURL
+          Write-Host 'Setting OWA Virtual Directories ExternalURL' -ForegroundColor Yellow
+          Get-OwaVirtualDirectory | ? {$_.ExternalURL -notlike $OWAVirtualDirectory} | set-OwaVirtualDirectory -ExternalURL $OWAVirtualDirectory
+          Write-Host 'New OWA Virtual Directories ExternalURL' -ForegroundColor Red
+          Get-OwaVirtualDirectory | fl ExternalURL
+     }
+     Write-Host 'Checking ECP Virtual Directories InternalURL' -ForegroundColor Green
+     If ((Get-ECPVirtualDirectory | ? {$_.InternalURL -notlike $ECPVirtualDirectory}).count -gt 0) {
+          Get-ECPVirtualDirectory | ? {$_.InternalURL -notlike $ECPVirtualDirectory} | fl InternalURL
+          Write-Host 'Setting ECP Virtual Directories InternalURL' -ForegroundColor Yellow
+          Get-ECPVirtualDirectory | ? {$_.InternalURL -notlike $ECPVirtualDirectory} | set-ECPVirtualDirectory -InternalURL $ECPVirtualDirectory
+          Write-Host 'New ECP Virtual Directories InternalURL' -ForegroundColor Red
+          Get-ECPVirtualDirectory | fl InternalURL
+     }
+     Write-Host 'Checking ECP Virtual Directories ExternalURL' -ForegroundColor Green
+     If ((Get-ECPVirtualDirectory | ? {$_.ExternalURL -notlike $ECPVirtualDirectory}).count -gt 0) {
+          Get-ECPVirtualDirectory | ? {$_.ExternalURL -notlike $ECPVirtualDirectory} | fl ExternalURL
+          Write-Host 'Setting ECP Virtual Directories ExternalURL' -ForegroundColor Yellow
+          Get-ECPVirtualDirectory | ? {$_.ExternalURL -notlike $ECPVirtualDirectory} | set-ECPVirtualDirectory -ExternalURL $ECPVirtualDirectory
+          Write-Host 'New ECP Virtual Directories ExternalURL' -ForegroundColor Red
+          Get-ECPVirtualDirectory | fl ExternalURL
+     }
+     Write-Host 'Checking OAB Virtual Directories InternalURL' -ForegroundColor Green
+     If ((Get-OABVirtualDirectory | ? {$_.InternalURL -notlike $OABVirtualDirectory}).count -gt 0) {
+          Get-OABVirtualDirectory | ? {$_.InternalURL -notlike $OABVirtualDirectory} | fl InternalURL
+          Write-Host 'Setting OAB Virtual Directories InternalURL' -ForegroundColor Yellow
+          Get-OABVirtualDirectory | ? {$_.InternalURL -notlike $OABVirtualDirectory} | set-OABVirtualDirectory -InternalURL $OABVirtualDirectory
+          Write-Host 'New OAB Virtual Directories InternalURL' -ForegroundColor Red
+          Get-OABVirtualDirectory | fl InternalURL
+     }
+     Write-Host 'Checking OAB Virtual Directories ExternalURL' -ForegroundColor Green
+     If ((Get-OABVirtualDirectory | ? {$_.ExternalURL -notlike $OABVirtualDirectory}).count -gt 0) {
+          Get-OABVirtualDirectory | ? {$_.ExternalURL -notlike $OABVirtualDirectory} | fl ExternalURL
+          Write-Host 'Setting OAB Virtual Directories ExternalURL' -ForegroundColor Yellow
+          Get-OABVirtualDirectory | ? {$_.ExternalURL -notlike $OABVirtualDirectory} | set-OABVirtualDirectory -ExternalURL $OABVirtualDirectory
+          Write-Host 'New OAB Virtual Directories ExternalURL' -ForegroundColor Red
+          Get-OABVirtualDirectory | fl ExternalURL
+     }
+     Write-Host 'Checking MAPI Virtual Directories InternalURL' -ForegroundColor Green
+     If ((Get-MAPIVirtualDirectory | ? {$_.InternalURL -notlike $MAPIVirtualDirectory}).count -gt 0) {
+          Get-MAPIVirtualDirectory | ? {$_.InternalURL -notlike $MAPIVirtualDirectory} | fl InternalURL
+          Write-Host 'Setting MAPI Virtual Directories InternalURL' -ForegroundColor Yellow
+          Get-MAPIVirtualDirectory | ? {$_.InternalURL -notlike $MAPIVirtualDirectory} | set-MAPIVirtualDirectory -InternalURL $MAPIVirtualDirectory
+          Write-Host 'New MAPI Virtual Directories InternalURL' -ForegroundColor Red
+          Get-MAPIVirtualDirectory | fl InternalURL
+     }
+     Write-Host 'Checking MAPI Virtual Directories ExternalURL' -ForegroundColor Green
+     If ((Get-MAPIVirtualDirectory | ? {$_.ExternalURL -notlike $MAPIVirtualDirectory}).count -gt 0) {
+          Get-MAPIVirtualDirectory | ? {$_.ExternalURL -notlike $MAPIVirtualDirectory} | fl ExternalURL
+          Write-Host 'Setting MAPI Virtual Directories ExternalURL' -ForegroundColor Yellow
+          Get-MAPIVirtualDirectory | ? {$_.ExternalURL -notlike $MAPIVirtualDirectory} | set-MAPIVirtualDirectory -ExternalURL $MAPIVirtualDirectory
+          Write-Host 'New MAPI Virtual Directories ExternalURL' -ForegroundColor Red
+          Get-MAPIVirtualDirectory | fl ExternalURL
+     }
+          Write-Host 'Checking ActiveSync Virtual Directories InternalURL' -ForegroundColor Green
+     If ((Get-ActiveSyncVirtualDirectory | ? {$_.InternalURL -notlike $ActiveSyncVirtualDirectory}).count -gt 0) {
+          Get-ActiveSyncVirtualDirectory | ? {$_.InternalURL -notlike $ActiveSyncVirtualDirectory} | fl InternalURL
+          Write-Host 'Setting ActiveSync Virtual Directories InternalURL' -ForegroundColor Yellow
+          Get-ActiveSyncVirtualDirectory | ? {$_.InternalURL -notlike $ActiveSyncVirtualDirectory} | set-ActiveSyncVirtualDirectory -InternalURL $ActiveSyncVirtualDirectory
+          Write-Host 'New ActiveSync Virtual Directories InternalURL' -ForegroundColor Red
+          Get-ActiveSyncVirtualDirectory | fl InternalURL
+     }
+     Write-Host 'Checking ActiveSync Virtual Directories ExternalURL' -ForegroundColor Green
+     If ((Get-ActiveSyncVirtualDirectory | ? {$_.ExternalURL -notlike $ActiveSyncVirtualDirectory}).count -gt 0) {
+          Get-ActiveSyncVirtualDirectory | ? {$_.ExternalURL -notlike $ActiveSyncVirtualDirectory} | fl ExternalURL
+          Write-Host 'Setting ActiveSync Virtual Directories ExternalURL' -ForegroundColor Yellow
+          Get-ActiveSyncVirtualDirectory | ? {$_.ExternalURL -notlike $ActiveSyncVirtualDirectory} | set-ActiveSyncVirtualDirectory -ExternalURL $ActiveSyncVirtualDirectory
+          Write-Host 'New ActiveSync Virtual Directories ExternalURL' -ForegroundColor Red
+          Get-ActiveSyncVirtualDirectory | fl ExternalURL
+     }
+     Write-Host 'Checking WebServices Virtual Directories InternalURL' -ForegroundColor Green
+     If ((Get-WebServicesVirtualDirectory | ? {$_.InternalURL -notlike $WebServicesVirtualDirectory}).count -gt 0) {
+          Get-WebServicesVirtualDirectory | ? {$_.InternalURL -notlike $WebServicesVirtualDirectory} | fl InternalURL
+          Write-Host 'Setting WebServices Virtual Directories InternalURL' -ForegroundColor Yellow
+          Get-WebServicesVirtualDirectory | ? {$_.InternalURL -notlike $WebServicesVirtualDirectory} | set-WebServicesVirtualDirectory -InternalURL $WebServicesVirtualDirectory -force
+          Write-Host 'New WebServices Virtual Directories InternalURL' -ForegroundColor Red
+          Get-WebServicesVirtualDirectory | fl InternalURL
+     }
+     Write-Host 'Checking WebServices Virtual Directories ExternalURL' -ForegroundColor Green
+     If ((Get-WebServicesVirtualDirectory | ? {$_.ExternalURL -notlike $WebServicesVirtualDirectory}).count -gt 0) {
+          Get-WebServicesVirtualDirectory | ? {$_.ExternalURL -notlike $WebServicesVirtualDirectory} | fl ExternalURL
+          Write-Host 'Setting WebServices Virtual Directories ExternalURL' -ForegroundColor Yellow
+          Get-WebServicesVirtualDirectory | ? {$_.ExternalURL -notlike $WebServicesVirtualDirectory} | set-WebServicesVirtualDirectory -ExternalURL $WebServicesVirtualDirectory -force
+          Write-Host 'New WebServices Virtual Directories ExternalURL' -ForegroundColor Red
+          Get-WebServicesVirtualDirectory | fl ExternalURL
+     }
+     Write-Host 'Checking Outlook Anywhere Internal Host Name' -ForegroundColor Green
+     If ((Get-OutlookAnywhere | ? {$_.Internalhostname -notlike $ExchangeMailURL}).count -gt 0) {
+          Get-OutlookAnywhere | ? {$_.Internalhostname -notlike $ExchangeMailURL} | fl Internalhostname
+          Write-Host 'Setting Outlook Anywhere Internal Host Name' -ForegroundColor Yellow
+          Get-OutlookAnywhere | ? {$_.Internalhostname -notlike $ExchangeMailURL} | Set-OutlookAnywhere -Internalhostname $ExchangeMailURL -InternalClientsRequireSsl $true -DefaultAuthenticationMethod NTLM
+          Write-Host 'New Outlook Anywhere Internal Host Name' -ForegroundColor Red
+          Get-OutlookAnywhere | fl InternalURL
+     }
+     Write-Host 'Checking Outlook Anywhere External Host Name' -ForegroundColor Green
+     If ((Get-OutlookAnywhere | ? {$_.Externalhostname -notlike $ExchangeMailURL}).count -gt 0) {
+          Get-OutlookAnywhere | ? {$_.Externalhostname -notlike $ExchangeMailURL} | fl Externalhostname
+          Write-Host 'Setting Outlook Anywhere External Host Name' -ForegroundColor Yellow
+          Get-OutlookAnywhere | ? {$_.Externalhostname -notlike $ExchangeMailURL} | Set-OutlookAnywhere -Externalhostname $ExchangeMailURL -ExternalClientsRequireSsl $true -DefaultAuthenticationMethod NTLM
+          Write-Host 'New Outlook Anywhere External Host Name' -ForegroundColor Red
+          Get-OutlookAnywhere | fl ExternalURL
+     }
+     #### Add to Web Servers Group
+     #### Reboot Exchange Server
+     Write-Host 'Obtaining New Certificate' -ForegroundColor Green
+     $Certificate = Get-Certificate -Template $CertTemplate -DNSName $ExchangeMailURL -CertStoreLocation cert:\LocalMachine\My
+     $Certificate | FL
+     Write-Host 'Binding Certificate to Exchange Services' -ForegroundColor Green
+     Enable-ExchangeCertificate -thumbprint $Certificate.certificate.thumbprint -Services IIS,POP,IMAP,SMTP -confirm:$false -force
+     Get-ExchangeCertificate
+     }
+Else {
+      write-host "Exchange Not Installed" -Foregroundcolor green
+     }
 
-####Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
-####Connect-ExchangeServer -auto -ClientApplication:ManagementShell
-####Obtain Certificate
 
-Write-Host 'Getting OWA Virtual Directories' -ForegroundColor Green
-Get-OwaVirtualDirectory | fl InternalURL,ExternalURL
-Write-Host 'Setting OWA Virtual Directories' -ForegroundColor Yellow
-Get-OwaVirtualDirectory | set-OwaVirtualDirectory -InternalURL https://$ExchangeMailURL/owa  -ExternalURL https://$ExchangeMailURL/owa
-Write-Host 'New OWA Virtual Directories' -ForegroundColor Red
-Get-OwaVirtualDirectory | fl InternalURL,ExternalURL
+###################################################################################################
+Stop-Transcript
 
-Write-Host 'Getting ECP Virtual Directories' -ForegroundColor Green
-Get-EcpVirtualDirectory | fl InternalURL,ExternalURL
-Write-Host 'Setting ECP Virtual Directories' -ForegroundColor Yellow
-Get-EcpVirtualDirectory | Set-EcpVirtualDirectory -InternalURL https://$ExchangeMailURL/ecp  -ExternalURL https://$ExchangeMailURL/ecp
-Write-Host 'New ECP Virtual Directories' -ForegroundColor Red
-Get-EcpVirtualDirectory | fl InternalURL,ExternalURL
-
-Write-Host 'Getting ActiveSync Virtual Directories' -ForegroundColor Green
-Get-ActiveSyncVirtualDirectory | fl InternalURL,ExternalURL
-Write-Host 'Setting AciveSync Virtual Directories' -ForegroundColor Yellow
-Get-ActiveSyncVirtualDirectory | set-ActiveSyncVirtualDirectory -InternalURL https://$ExchangeMailURL/Microsoft-Server-ActiveSync  -ExternalURL https://$ExchangeMailURL/Microsoft-Server-ActiveSync
-Write-Host 'New ActiveSync Virtual Directories' -ForegroundColor Red
-Get-ActiveSyncVirtualDirectory | fl InternalURL,ExternalURL
-
-Write-Host 'Getting OAB Virtual Directories' -ForegroundColor Green
-Get-OabVirtualDirectory | fl InternalURL,ExternalURL
-Write-Host 'Setting OAB Virtual Directories' -ForegroundColor Yellow
-Get-OabVirtualDirectory | Set-OabVirtualDirectory -InternalURL https://$ExchangeMailURL/OAB  -ExternalURL https://$ExchangeMailURL/OAB
-Write-Host 'New OAB Virtual Directories' -ForegroundColor Red
-Get-OabVirtualDirectory | fl InternalURL,ExternalURL
-
-Write-Host 'Getting WebServices Virtual Directories' -ForegroundColor Green
-Get-WebServicesVirtualDirectory | fl InternalURL,ExternalURL
-Write-Host 'Setting WebServices Virtual Directories' -ForegroundColor Yellow
-Get-WebServicesVirtualDirectory | Set-WebServicesVirtualDirectory -InternalURL https://$ExchangeMailURL/EWS/Exchange.asmx -ExternalURL https://$ExchangeMailURL/EWS/Exchange.asmx -force
-Write-Host 'New WebServices Virtual Directories' -ForegroundColor Red
-Get-WebServicesVirtualDirectory | fl InternalURL,ExternalURL
-
-Write-Host 'Getting OutlookAnywhere Host Name' -ForegroundColor Green
-Get-OutlookAnywhere | fl Internalhostname,Externalhostname
-Write-Host 'Setting OutlookAnywhere Host Name' -ForegroundColor Yellow
-Get-OutlookAnywhere | Set-OutlookAnywhere -Internalhostname $ExchangeMailURL -Externalhostname $ExchangeMailURL -InternalClientsRequireSsl $true -ExternalClientsRequireSsl $true -DefaultAuthenticationMethod NTLM
-Write-Host 'New OutlookAnywhere Host Name' -ForegroundColor Red
-Get-OutlookAnywhere | fl Internalhostname,Externalhostname
-
-####No longer needed?
-####Write-Host 'Getting PowerShell Virtual Directories' -ForegroundColor Green
-####Get-PowerShellVirtualDirectory | fl InternalURL,ExternalURL
-####Write-Host 'Setting PowerShell Virtual Directories' -ForegroundColor Yellow
-####Get-PowerShellVirtualDirectory | Set-EcpVirtualDirectory -InternalURL https://$ExchangeMailURL/powershell -ExternalURL https://####$ExchangeMailURL/powershell
-####Write-Host 'New PowerShell Virtual Directories' -ForegroundColor Red
-####Get-PowerShellVirtualDirectory | fl InternalURL,ExternalURL
-
-####No longer needed?
-####Write-Host 'Getting Client Access Array' -ForegroundColor Green
-####Get-ClientAccessService | fl ClientAccessArray
-####Write-Host 'Setting Client Access Array' -ForegroundColor Yellow
-####Get-ClientAccessService | Set-ClientAccessService -ClientAccessArray $ExchangeMailURL
-####Write-Host 'New Client Access Array' -ForegroundColor Red
-####Get-ClientAccessService | fl ClientAccessArray
-
-Write-Host 'Getting MAPI Virtual Directories' -ForegroundColor Green
-Get-MapiVirtualDirectory | fl InternalURL,ExternalURL
-Write-Host 'Setting MAPI Virtual Directories' -ForegroundColor Yellow
-Get-MapiVirtualDirectory | Set-MapiVirtualDirectory -InternalURL https://$ExchangeMailURL/mapi  -ExternalURL https://$ExchangeMailURL/mapi
-Write-Host 'New MAPI Virtual Directories' -ForegroundColor Red
-Get-MapiVirtualDirectory | fl InternalURL,ExternalURL
-
-#### Add to Web Servers Group
-#### Reboot Exchange Server
-$Certificate = Get-Certificate -Template "$DomainName\Web Servers" -SubjectName "Exchange Server 2019 DateTime" -DNSName $ExchangeMailURL -CertStoreLocation cert:\LocalMachine\My
-
-
+######################################### REBOOT SERVER ###########################################
