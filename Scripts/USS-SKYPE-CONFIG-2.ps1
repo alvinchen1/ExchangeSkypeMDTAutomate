@@ -15,7 +15,7 @@ SYNTAX
 # Stop-Transcript
 # Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-SKYPE-CONFIG-2.log
-Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-SKYPE-CONFIG-2.log
+Start-Transcript -Path \\SHARE\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-SKYPE-CONFIG-2.log
 
 # Declare Variables
 # -----------------------------------------------------------------------------
