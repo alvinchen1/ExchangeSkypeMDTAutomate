@@ -9,14 +9,6 @@ SYNTAX
     .\$ScriptName
  #>
 
-
-###################################################################################################
-### Start-Transcript
-# Stop-Transcript
-# Overwrite existing log.
-Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-SKYPE-CONFIG-2.log
-Start-Transcript -Path \\SHARE\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-SKYPE-CONFIG-2.log
-
 # Declare Variables
 # -----------------------------------------------------------------------------
 $ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
@@ -33,6 +25,7 @@ If (!(Test-Path -Path $ConfigFile))
 }
 $XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
+$InstallShare = ($WS | ? {($_.Name -eq "InstallShare")}).Value 
 $DomainDnsName = ($WS | ? {($_.Name -eq "DomainDnsName")}).Value
 $Windows2019SourcePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\W2019\sources"
 $Skype4BusinessPrereqPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Skype4BusinessPrereqs"
@@ -41,6 +34,13 @@ $Skype4BusinessPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\SkypeFo
 $SkypeForBusiness = ($XML.Component | ? {($_.Name -eq "SkypeForBusiness")}).Settings.Configuration
 $LDAPDomain = ($WS | ? {($_.Name -eq "DomainDistinguishedName")}).Value
 $CertTemplatePrefix = ($WS | ? {($_.Name -eq "DomainName")}).Value
+
+###################################################################################################
+### Start-Transcript
+### Stop-Transcript
+### Overwrite existing log.
+Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\$ScriptName.log
+Start-Transcript -Path $InstallShare\LOGS\$env:COMPUTERNAME\$ScriptName.log
 
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ###

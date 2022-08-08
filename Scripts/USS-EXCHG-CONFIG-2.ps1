@@ -10,13 +10,6 @@ SYNTAX
  #>
 
 
-###################################################################################################
-### Start-Transcript
-# Stop-Transcript
-# Overwrite existing log.
-Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-EXCHG-CONFIG-1.log
-Start-Transcript -Path \\SHARE\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-EXCHG-CONFIG-1.log
-
 # Declare Variables
 # -----------------------------------------------------------------------------
 $ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
@@ -37,6 +30,7 @@ $TargetExchangePath = ($Exchange | ? {($_.Name -eq "TargetExchangePath")}).Value
 $ExchangeOrgName = ($Exchange | ? {($_.Name -eq "ExchangeOrgName")}).Value
 $ExchangeMailURL = ($Exchange | ? {($_.Name -eq "ExchangeMailURL")}).Value
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
+$InstallShare = ($WS | ? {($_.Name -eq "InstallShare")}).Value 
 $Windows2019SourcePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\W2019\sources"
 $ExchangePrereqPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\ExchangePrereqs"
 $DOTNETFRAMEWORKPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\DOTNETFRAMEWORK_4.8"
@@ -49,6 +43,14 @@ $OABVirtualDirectory = "https://" + $ExchangeMailURL + "/OAB"
 $MAPIVirtualDirectory = "https://" + $ExchangeMailURL + "/mapi"
 $ActiveSyncVirtualDirectory = "https://" + $ExchangeMailURL + "/Microsoft-Server-ActiveSync"
 $WebServicesVirtualDirectory = "https://" + $ExchangeMailURL + "/EWS/Exchange.asmx"
+
+###################################################################################################
+### Start-Transcript
+### Stop-Transcript
+### Overwrite existing log.
+Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\$ScriptName.log
+Start-Transcript -Path $InstallShare\LOGS\$env:COMPUTERNAME\$ScriptName.log
+
 
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ###
