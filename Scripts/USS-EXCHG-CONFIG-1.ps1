@@ -21,12 +21,26 @@
 # (E:)(500gb+) EXCHG-DB - (4k, NTFS)
 # (F:)(40gb+) EXCHG-LOGS - (64k BlockSize, ReFS)
 
+# Declare Variables
+# -----------------------------------------------------------------------------
+$ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
+$ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
+$RootDir = Split-Path $ScriptDir –Parent
+$ConfigFile = "$RootDir\config.xml"
+
+###################################################################################################
+### Start-Transcript
+### Stop-Transcript
+### Overwrite existing log.
+Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\$ScriptName.log
+Start-Transcript -Path $RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log
+
 ###################################################################################################
 ### Start-Transcript
 # Stop-Transcript
 # Overwrite existing log.
-Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-EXCHG-CONFIG-1.log
-Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-EXCHG-CONFIG-1.log
+###Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-EXCHG-CONFIG-1.log
+###Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-EXCHG-CONFIG-1.log
 
 
 ###################################################################################################
@@ -65,9 +79,9 @@ Write-Host -foregroundcolor green "Configure Disk for EXCHAGE..."
 ### Set Offline Disks Online 
 # Get-Disk
 Set-disk 1 -isOffline $false
-Set-disk 2 -isOffline $false
-Set-disk 3 -isOffline $false
-Set-disk 4 -isOffline $false
+# Set-disk 2 -isOffline $false
+# Set-disk 3 -isOffline $false
+# Set-disk 4 -isOffline $false
 
 ###################################################################################################
 ### Initilize ALL disk
@@ -76,15 +90,15 @@ Get-Disk | where PartitionStyle -eq 'raw' | Initialize-Disk -PartitionStyle GPT
 ###################################################################################################
 ### Partiton and Assign Drive Letter to ALL Disk
 New-Partition -DiskNumber 1 -UseMaximumSize -DriveLetter D 
-New-Partition -DiskNumber 2 -UseMaximumSize -DriveLetter E
-New-Partition -DiskNumber 3 -UseMaximumSize -DriveLetter F
-New-Partition -DiskNumber 4 -UseMaximumSize -DriveLetter G
+# New-Partition -DiskNumber 2 -UseMaximumSize -DriveLetter E
+# New-Partition -DiskNumber 3 -UseMaximumSize -DriveLetter F
+# New-Partition -DiskNumber 4 -UseMaximumSize -DriveLetter G
 
 ### Format the Volumes
 Format-Volume -DriveLetter D -FileSystem NTFS -NewFileSystemLabel “EXCHG-BIN” -Confirm:$false
-Format-Volume -DriveLetter E -FileSystem ReFS -AllocationUnitSize 64KB -NewFileSystemLabel “EXCHG-DB” -Confirm:$false
-Format-Volume -DriveLetter F -FileSystem ReFS -AllocationUnitSize 64KB -NewFileSystemLabel “EXCHG-LOGS” -Confirm:$false
-Format-Volume -DriveLetter G -FileSystem ReFS -AllocationUnitSize 64KB -NewFileSystemLabel  “DATA” -Confirm:$false
+# Format-Volume -DriveLetter E -FileSystem ReFS -AllocationUnitSize 64KB -NewFileSystemLabel “EXCHG-DB” -Confirm:$false
+# Format-Volume -DriveLetter F -FileSystem ReFS -AllocationUnitSize 64KB -NewFileSystemLabel “EXCHG-LOGS” -Confirm:$false
+# Format-Volume -DriveLetter G -FileSystem ReFS -AllocationUnitSize 64KB -NewFileSystemLabel  “DATA” -Confirm:$false
 
 
 ###################################################################################################

@@ -20,9 +20,10 @@ $ConfigFile = "$RootDir\config.xml"
 If (!(Test-Path -Path $ConfigFile)) 
 {
     Write-Host "Missing configuration file $ConfigFile" -ForegroundColor Red
-    Stop-Transcript
+### Stop-Transcript
     Exit
 }
+
 $XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
 $InstallShare = ($WS | ? {($_.Name -eq "InstallShare")}).Value 
@@ -40,7 +41,7 @@ $CertTemplatePrefix = ($WS | ? {($_.Name -eq "DomainName")}).Value
 ### Stop-Transcript
 ### Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\$ScriptName.log
-Start-Transcript -Path $InstallShare\LOGS\$env:COMPUTERNAME\$ScriptName.log
+Start-Transcript -Path $RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log
 
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ###
@@ -62,12 +63,6 @@ Start-Transcript -Path $InstallShare\LOGS\$env:COMPUTERNAME\$ScriptName.log
 ###                   Place in Skype4BusinessCU
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 clear-host
-###write-host $XML -Foregroundcolor green
-###write-host $WS -Foregroundcolor green
-###write-host $Windows2019SourcePath -Foregroundcolor green
-###write-host $Skype4BusinessPrereqPath -Foregroundcolor green
-###write-host $Skype4BusinessPath -Foregroundcolor green
-###write-host $SkypeForBusiness -Foregroundcolor green
 
 # =============================================================================
 # FUNCTIONS
@@ -91,26 +86,37 @@ function Test-PendingReboot
  return $false
 }
 
-
 # =============================================================================
 # MAIN ROUTINE
 # =============================================================================
 
-
 $WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
-If ($WindowsFeature.count -gt '36') {write-host "Windows Server prerequisites already installed" -ForegroundColor Green}
+If ($WindowsFeature.count -gt '34') {write-host "Windows Server prerequisites already installed" -ForegroundColor Green}
 Else {
+      IF ((Test-PendingReboot) -eq $false) {
       write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
-      Install-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net, Web-Net-Ext, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
+######      Install-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net, Web-Net-Ext, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
+      Install-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net45, Web-Net-Ext45, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
+      }
+      Else {
+            write-host "Reboot Needed... return script after reboot." -Foregroundcolor red
+            exit
+           }
      }
 
-write-host "Reboot needed " Test-PendingReboot
+$WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
 $dotnetFramework48main = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(0,1)
 $dotnetFramework48rev = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(2,1)
 If ($dotnetFramework48main -eq '4' -and $dotnetFramework48rev -gt 7) {write-host ".net Framework 4.8 already installed" -ForegroundColor Green}
 Else {
-      write-host "Installing .net Framework 4.8" -Foregroundcolor green
-      start-process $DOTNETFRAMEWORKPath"\ndp48-x86-x64-allos-enu.exe" -Wait -Argumentlist " /q /norestart"
+      If ($WindowsFeature.count -gt '34') {
+         write-host "Installing .net Framework 4.8" -Foregroundcolor green
+         start-process $DOTNETFRAMEWORKPath"\ndp48-x86-x64-allos-enu.exe" -Wait -Argumentlist " /q /norestart"
+      }
+      Else {
+            write-host "Windows Components for Skype Not Installed...skipping net Framework 4.8" -Foregroundcolor red
+            exit
+           }
      }
 
 $BootStrapCore = Get-Package | where {$_.Name -like "Skype for Business Server 2019, Core Components"}
@@ -134,7 +140,7 @@ If ($BootStrapCore.count -eq '1') {
       $ADPSModule = get-module | ? {$_.Name -eq "ActiveDirectory"}
       IF ($ADPSModule.count -eq '1') {
              $ADOSchemaLocation = 'CN=Schema,CN=Configuration,'+$LDAPDomain
-             IF (get-adobject -SearchBase $ADOSchemaLocation -filter * | Where {$_.DistinguishedName -like "CN=ms-RTC-SIP-SchemaVersion*"} -eq 0) {
+             IF ((get-adobject -SearchBase $ADOSchemaLocation -filter * | Where {$_.DistinguishedName -like "CN=ms-RTC-SIP-SchemaVersion*"}).count -eq 0) {
                  $ADSchemaLocation = 'AD:\CN=Schema,CN=Configuration,'+$LDAPDomain
                  $SkypeSchemaLocation = 'AD:\CN=ms-RTC-SIP-SchemaVersion,CN=Schema,CN=Configuration,'+$LDAPDomain
                  $ADSchema = Get-ItemProperty $SkypeSchemaLocation -Name rangeUpper
@@ -145,12 +151,18 @@ If ($BootStrapCore.count -eq '1') {
                      Start-Sleep -seconds 300
                   }
              }
-             Else {write-host "Active Directory Schema already extended for Skype For Business 2019" -ForegroundColor Green}
+             Else {
+                   write-host "Active Directory Schema already extended for Skype For Business 2019" -ForegroundColor Green
+                  }
       }
-      Else {write-host "Active Directory PowerShell not detected, skipping Schema check" -ForegroundColor Red}
+      Else {
+            write-host "Active Directory PowerShell not detected, skipping Schema check" -ForegroundColor Red
+            exit
+           }
       }
 Else {
-      write-host "Skype for Business Server not detected, schema check" -Foregroundcolor green
+      write-host "Skype for Business Server not detected, skipping schema check" -Foregroundcolor green
+      exit
      }
 
 ### Prepare Forest

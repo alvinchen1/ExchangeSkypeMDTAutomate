@@ -21,7 +21,7 @@ $ConfigFile = "$RootDir\config.xml"
 If (!(Test-Path -Path $ConfigFile)) 
 {
     Write-Host "Missing configuration file $ConfigFile" -ForegroundColor Red
-    Stop-Transcript
+### Stop-Transcript
     Exit
 }
 $XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
@@ -31,6 +31,7 @@ $ExchangeOrgName = ($Exchange | ? {($_.Name -eq "ExchangeOrgName")}).Value
 $ExchangeMailURL = ($Exchange | ? {($_.Name -eq "ExchangeMailURL")}).Value
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
 $InstallShare = ($WS | ? {($_.Name -eq "InstallShare")}).Value 
+$DomainDnsName = ($WS | ? {($_.Name -eq "DomainDnsName")}).Value 
 $Windows2019SourcePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\W2019\sources"
 $ExchangePrereqPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\ExchangePrereqs"
 $DOTNETFRAMEWORKPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\DOTNETFRAMEWORK_4.8"
@@ -49,7 +50,7 @@ $WebServicesVirtualDirectory = "https://" + $ExchangeMailURL + "/EWS/Exchange.as
 ### Stop-Transcript
 ### Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\$ScriptName.log
-Start-Transcript -Path $InstallShare\LOGS\$env:COMPUTERNAME\$ScriptName.log
+Start-Transcript -Path $RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log
 
 
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -85,8 +86,8 @@ Start-Transcript -Path $InstallShare\LOGS\$env:COMPUTERNAME\$ScriptName.log
 ###                        Under Release Details, find the latest ISO Download
 ###                        Mount and copy into Exchange Path Folder 
 ###
-###     Known post steps as of 7/26/2022
-###         Request and obtain certificate from certificate authority Get-Certificate,New-ExchangeCertificate, Enable-ExchangeCertificate
+###     Known post steps as of 8/10/2022
+###         Add Computer Account to Web Services Group (after Certificate Authority has been installed)
 ###         Add product key Set-ExchangeServer <ServerName> -ProductKey <ProductKey>
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 clear-host
@@ -118,19 +119,34 @@ function Test-PendingReboot
 # MAIN ROUTINE
 # =============================================================================
 
+
+
 $WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
 If ($WindowsFeature.count -gt '33') {write-host "Windows Server prerequisites already installed" -ForegroundColor Green}
 Else {
+      IF ((Test-PendingReboot) -eq $false) {
       write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
       Install-WindowsFeature Server-Media-Foundation, NET-Framework-45-Features, RPC-over-HTTP-proxy, RSAT-Clustering, RSAT-Clustering-CmdInterface, RSAT-Clustering-Mgmt, RSAT-Clustering-PowerShell, WAS-Process-Model, Web-Asp-Net45, Web-Basic-Auth, Web-Client-Auth, Web-Digest-Auth, Web-Dir-Browsing, Web-Dyn-Compression, Web-Http-Errors, Web-Http-Logging, Web-Http-Redirect, Web-Http-Tracing, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Lgcy-Mgmt-Console, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, Web-Static-Content, Web-Windows-Auth, Web-WMI, Windows-Identity-Foundation, RSAT-ADDS, RSAT-AD-PowerShell -Source $Windows2019SourcePath
+      }
+      Else {
+            write-host "Reboot Needed... return script after reboot." -Foregroundcolor red
+            exit
+           }
      }
-
+     
+$WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
 $dotnetFramework48main = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(0,1)
 $dotnetFramework48rev = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(2,1)
 If ($dotnetFramework48main -eq '4' -and $dotnetFramework48rev -gt 7) {write-host ".net Framework 4.8 already installed" -ForegroundColor Green}
 Else {
+      If ($WindowsFeature.count -gt '33') {
       write-host "Installing .net Framework 4.8" -Foregroundcolor green
       start-process $DOTNETFRAMEWORKPath"\ndp48-x86-x64-allos-enu.exe" -Wait -Argumentlist " /q /norestart"
+      }
+      Else {
+            write-host "Windows Components for Exchange Not Installed...skipping net Framework 4.8" -Foregroundcolor red
+            exit
+           }
      }
 
 ####$VisualC2012 = Get-Package -Name 'Microsoft Visual C++ 2012 Redistributable (x64)*' 2>&1 | out-null
@@ -176,10 +192,14 @@ Else {
 import-module ActiveDirectory 2>&1 | out-null
 $ADPSModule = get-module | ? {$_.Name -eq "ActiveDirectory"}
 IF ($ADPSModule.count -eq '1') {
-       ####$LDAPDomain = (get-addomain).DistinguishedName
-       ###get-adobject -SearchBase "CN=Schema,CN=Configuration,DC=USS,DC=LOCAL" -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"}
        $ADOSchemaLocation = 'CN=Schema,CN=Configuration,'+$LDAPDomain
-       IF (get-adobject -SearchBase $ADOSchemaLocation -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"} -eq 0) {
+       IF ((get-adobject -SearchBase $ADOSchemaLocation -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"}).count -eq 0) {
+           write-host "Extending Active Directory Schema" -Foregroundcolor green
+           start-process $ExchangePath"\setup.exe" -Wait -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /ps"
+           write-host "Pausing for Schema replication" -Foregroundcolor green
+           Start-Sleep -seconds 300
+       }
+       Else {
            $ADSchemaLocation = 'AD:\CN=Schema,CN=Configuration,'+$LDAPDomain
            $ExchangeSchemaLocation = 'AD:\CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,'+$LDAPDomain
            $ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
@@ -189,22 +209,19 @@ IF ($ADPSModule.count -eq '1') {
                write-host "Pausing for Schema replication" -Foregroundcolor green
                Start-Sleep -seconds 300
             }
+           Else {write-host "Active Directory Schema already extended for Exchange 2019" -ForegroundColor Green}
        }
-       Else {write-host "Active Directory Schema already extended for Exchange 2019" -ForegroundColor Green}
 }
 Else {write-host "Active Directory PowerShell not detected, skipping Schema check" -ForegroundColor Red}
 
 ####
 ####   Check Active Directory Prep
 ####
-
 import-module ActiveDirectory 2>&1 | out-null
 $ADPSModule = get-module | ? {$_.Name -eq "ActiveDirectory"}
 IF ($ADPSModule.count -eq '1') {
-       ####$LDAPDomain = (get-addomain).DistinguishedName
-       ###get-adobject -SearchBase "CN=Schema,CN=Configuration,DC=USS,DC=LOCAL" -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"}
        $ADOSchemaLocation = 'CN=Schema,CN=Configuration,'+$LDAPDomain
-       IF (get-adobject -SearchBase $ADOSchemaLocation -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"} -eq 0) {
+       IF ((get-adobject -SearchBase $ADOSchemaLocation -filter * | Where {$_.DistinguishedName -like "CN=ms-exch-schema*"}).count -eq 0) {
            $ADSchemaLocation = 'AD:\CN=Schema,CN=Configuration,'+$LDAPDomain
            $ExchangeSchemaLocation = 'AD:\CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,'+$LDAPDomain
            $ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
@@ -360,6 +377,9 @@ If ($Exchange.count -gt '0') {
      }
      #### Add to Web Servers Group
      #### Reboot Exchange Server
+     #### Need to check for Web Servers Group
+     #### Reboot Exchange Server
+
      Write-Host 'Obtaining New Certificate' -ForegroundColor Green
      $Certificate = Get-Certificate -Template $CertTemplate -DNSName $ExchangeMailURL -CertStoreLocation cert:\LocalMachine\My
      $Certificate | FL
@@ -371,6 +391,13 @@ Else {
       write-host "Exchange Not Installed" -Foregroundcolor green
      }
 
+
+###################################################################################################
+#### DNS Entries
+####       Need to get IP address and name from variables
+enter-pssession 
+Add-DnsServerResourceRecordA -ZoneName $DomainDnsName -name mail -ipv4address 10.10.5.21 -TimeToLive 00:05:00
+exit-pssession
 
 ###################################################################################################
 Stop-Transcript
