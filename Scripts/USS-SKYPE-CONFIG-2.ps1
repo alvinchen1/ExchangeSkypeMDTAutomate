@@ -33,6 +33,8 @@ $Skype4BusinessPrereqPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\S
 $DOTNETFRAMEWORKPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\DOTNETFRAMEWORK_4.8"
 $Skype4BusinessPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\SkypeForBusiness\OCS_Eval"
 $SkypeForBusiness = ($XML.Component | ? {($_.Name -eq "SkypeForBusiness")}).Settings.Configuration
+$SkypeForBusinessCUPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Skype4BusinessCU"
+$SQLServer2019Path = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\SQLServer2019"
 $CSShareName = ($SkypeForBusiness | ? {($_.Name -eq "CSShareName")}).Value
 $CSShareNamePath = ($SkypeForBusiness | ? {($_.Name -eq "CSShareNamePath")}).Value
 $LDAPDomain = ($WS | ? {($_.Name -eq "DomainDistinguishedName")}).Value
@@ -96,21 +98,29 @@ function Test-PendingReboot
 # =============================================================================
 
 $WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
-If ($WindowsFeature.count -gt '34') {write-host "Windows Server prerequisites already installed" -ForegroundColor Green}
-Else {
-      IF ((Test-PendingReboot) -eq $false) {
-      write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
-######      Install-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net, Web-Net-Ext, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
-######      Install-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net45, Web-Net-Ext45, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service, -Source $Windows2019SourcePath
-######      Install-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net45, Web-Net-Ext45, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service, NET-Framework-Features, NET-Framework-Core -Source $Windows2019SourcePath
-      Add-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net, Web-Net-Ext, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
-      }
-      Else {
-            write-host "Reboot Needed... return script after reboot." -Foregroundcolor red
-            exit
-           }
-     }
-
+If ($WindowsFeature.count -gt '34') {
+   write-host "Windows Server prerequisites already installed" -ForegroundColor Green
+   }
+   Else {
+         IF ((Test-PendingReboot) -eq $false) {
+            IF ((Get-ChildItem -Path $Windows2019SourcePath).count -gt 1) {
+                write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
+######             Install-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net, Web-Net-Ext, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
+######             Install-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net45, Web-Net-Ext45, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service, -Source $Windows2019SourcePath
+######             Install-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net45, Web-Net-Ext45, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service, NET-Framework-Features, NET-Framework-Core -Source $Windows2019SourcePath
+                Add-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net, Web-Net-Ext, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
+                }
+                Else {
+                      write-host ".net Framework SXS not found." -Foregroundcolor red
+                      exit
+                     }
+                }
+            Else {
+                  write-host "Reboot Needed... return script after reboot." -Foregroundcolor red
+                  exit
+                 }
+         }
+   
 $WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
 $dotnetFramework48main = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(0,1)
 $dotnetFramework48rev = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').version.Substring(2,1)
@@ -139,7 +149,6 @@ Else {
 ####  Check is ADPS Module is installed before proceeding with Schema check, currently not working consistently, will attempt to update ####       schema when get-addomain fails
 ####
 ###get-addomain 2>&1 | out-null
-
 $BootStrapCore = Get-Package | where {$_.Name -like "Skype for Business Server 2019, Core Components"}
 If ($BootStrapCore.count -eq '1') {
       import-module "C:\Program Files\Common Files\Skype for Business Server 2019\Modules\SkypeForBusiness\SkypeForBusiness.psd1"
@@ -175,52 +184,165 @@ Else {
 ### Prepare Forest
 ###     TO DO: Check to see if Forest Already Prepared, Group CSAdministrators?
 ###            Check if member of Enteprise Admins
+$CSAdminsobj = Get-ADGroup -LDAPFilter "(SAMAccountName=CSAdministrator)"
 $BootStrapCore = Get-Package | where {$_.Name -like "Skype for Business Server 2019, Core Components"}
-If ($BootStrapCore.count -eq '1' -and ((get-adgroup -identity "CSAdministrator").ObjectClass) -ne "group") {
-      write-host "Preparing Forest for Skype For Business" -ForegroundColor Green
-      Enable-CSAdForest  -Verbose -Confirm:$false
-      #### Enable-CSAdForest  -Verbose -Confirm:$false -Report "C:\Users\otcadmin1.OTC\AppData\Local\Temp\2\Enable-CSAdForest-[2022_07_26][16_10_39].html"
-      write-host "Forest Prepared for Skype For Business" -ForegroundColor Green
-      Start-Sleep -seconds 300
+If ($BootStrapCore.count -eq '1') {
+      IF ($CSAdminsobj -eq $null){
+            write-host "Preparing Forest for Skype For Business." -ForegroundColor Green
+            Enable-CSAdForest  -Verbose -Confirm:$false
+            #### Enable-CSAdForest  -Verbose -Confirm:$false -Report "C:\Users\otcadmin1.OTC\AppData\Local\Temp\2\Enable-CSAdForest-[2022_07_26][16_10_39].html"
+            write-host "Forest Prepared for Skype For Business." -ForegroundColor Green
+            write-host "Pausing for Forest Prep replication." -Foregroundcolor green
+            Start-Sleep -seconds 300
+      }
+      ELSE {
+            write-host "Forest Already Prepared for Skype For Business 2019." -ForegroundColor Green
+            }
       }
 Else {
-      write-host "Skype for Business Server not detected, skipping forest prep" -Foregroundcolor green
+      write-host "Skype for Business Server not detected, skipping forest prep." -Foregroundcolor green
      }
 
 ### Prepare Domain
 ###     TO DO: Check to see if Domain Already Prepared
 $ADDomainPrep = get-csaddomain
 if ($ADDomainPrep -ne "LC_DOMAINSETTINGS_STATE_READY") { 
-     write-host "Preparing Domain for Skype For Business" -ForegroundColor Green
+     write-host "Preparing Domain for Skype For Business." -ForegroundColor Green
      Enable-CSAdDomain -Verbose -Confirm:$false
-     write-host "Domain Prepared for Skype For Business" -ForegroundColor Green
+     write-host "Domain Prepared for Skype For Business." -ForegroundColor Green
      }
 Else {
-     write-host "Domain already prepared for Skype For Business" -Foregroundcolor green
+     write-host "Domain already prepared for Skype For Business." -Foregroundcolor green
+     }
+
+###Add to  CSAdministrators and RTCUniversalServerAdmins
+IF ($CSAdminsobj -ne $null) {
+     $CSAdminsMembers = Get-ADGroupMember -Identity CSAdministrator -Recursive | Select -ExpandProperty Name
+     IF ($CSAdminsMembers -contains $env:UserName){
+         write-host $env:UserName "already in CSAdministrator Group." -Foregroundcolor green
+     }
+     ELSE {
+          Add-AdGroupMember -identity "CSAdministrator" -members $env:UserName
+          write-host $env:UserName "added to CSAdministrator.  Logoff and Logon may be needed before proceeding." -Foregroundcolor red
+          }
      }
 
 
-IF ((get-adgroup -identity "CSAdministrator").ObjectClass -eq "group") {
-     ####$whoami = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-     Add-AdGroupMember -identity "CSAdministrator" -members $env:UserName
-     write-host $env:UserName "added to CSAdministrator.  Logoff and Logon may be needed before proceeding." -Foregroundcolor red
+$RTCUniversalServerAdminsobj = Get-ADGroup -LDAPFilter "(SAMAccountName=RTCUniversalServerAdmins)"
+IF ($RTCUniversalServerAdminsobj -ne $null) {
+     $RTCUniversalServerAdminsMembers = Get-ADGroupMember -Identity RTCUniversalServerAdmins -Recursive | Select -ExpandProperty Name
+     IF ($RTCUniversalServerAdminsMembers -contains $env:UserName){
+         write-host $env:UserName "already in RTCUniversalServerAdmins Group." -Foregroundcolor green
+     }
+     ELSE {
+          Add-AdGroupMember -identity "RTCUniversalServerAdmins" -members $env:UserName
+          write-host $env:UserName "added to RTCUniversalServerAdmins.  Logoff and Logon may be needed before proceeding." -Foregroundcolor red
+          }
     }
-
-IF ((get-adgroup -identity "RTCUniversalServerAdmins").ObjectClass -eq "group") {
-     $whoami = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-     Add-AdGroupMember -identity "RTCUniversalServerAdmins" -members $env:UserName
-     write-host $env:UserName "added to RTCUniversalServerAdmins.  Logoff and Logon may be needed before proceeding." -Foregroundcolor red
-    }
-###Add to  CSAdministrators and RTCUniversalServerAdmins
 
 ####Install Admin Tools
 $AdminTools  = Get-Package | where {$_.Name -like "Skype for Business Server 2019, Administrative Tools*"}
-If ($AdminTools.count -eq '1') {write-host "Skype for Business Server 2019, Administrative Tools already installed" -ForegroundColor Green}
+If ($AdminTools.count -eq '1') {write-host "Skype for Business Server 2019, Administrative Tools already installed." -ForegroundColor Green}
 Else {
       write-host "Installing Skype for Business Server 2019, Administrative Tools" -Foregroundcolor green
       start-process msiexec.exe -Wait -Argumentlist " /i $Skype4BusinessPath\Setup\amd64\Setup\admintools.msi /qn"
      }
 
+IF ((get-fileshare | ? {$_.Name -eq $CSShareName}).count -eq "0") {
+    write-host "Creating CSShare" -Foregroundcolor green
+    [system.io.directory]::CreateDirectory($CSShareNamePath)
+    New-SMBShare -Name $CSShareName -Path $CSShareNamePath -FullAccess "Authenticated Users" -CachingMode None
+    }
+ELSE {
+     Write-host "CSShare already exists." -ForegroundColor Green
+}
+
+IF ((get-service | Where {$_.Name -eq 'MSSQL$RTC'}).count -eq 0) {
+     Write-host "Creating CMS Database." -ForegroundColor Green
+     start-process "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" -Wait -Argumentlist " /BootstrapSQLExpress"
+     start-process "netsh" -Wait -Argumentlist ' advfirewall firewall add rule name="SQL Browser" dir=in action=allow protocol=UDP localport=1434'
+     }
+ELSE {
+     Write-host "CMS Database already exists." -ForegroundColor Green
+}
+
+Write-host "Run Skype For Business Server Topology Builder, build new topology and successfully publish." -ForegroundColor Red
+
+
+IF ((get-service | Where {$_.Name -eq 'MSSQL$RTCLOCAL'}).count -eq 0) {
+     Write-host "Creating Local Configuration Store." -ForegroundColor Green
+     start-process "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" -Wait -Argumentlist " /BootstrapLocalMgmt"
+     Write-host "Local Configuration Store created.  Importing Configuration into Local Store." -ForegroundColor Green
+     $CSConfiguration = Export-CsConfiguration -AsBytes
+     Import-CsConfiguration -ByteInput $CSConfiguration -LocalStore
+     Write-host "Enabling Replica." -ForegroundColor Green
+     Enable-CSReplica -force
+     Write-host "Replica enabled.  Installing Skype For Business Roles" -ForegroundColor Green
+     ###### Replicate-CsCmsCertificates
+     start-process "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" -Wait
+     }
+ELSE {
+     Write-host "Local Configuration Store already exists." -ForegroundColor Green
+}
+
+If ((get-package | where {($_.Name -like "Skype for Business*") -and ($_.Version -eq "7.0.2046.0")}).count -gt '9') {
+      write-host "Applying Skype for Business Server Cumulative Update." -ForegroundColor Green
+      start-process $SkypeForBusinessCUPath"\SkypeServerUpdateInstaller" -Wait -Argumentlist "/silentmode"
+      Stop-CsWindowsService
+      start-process "net " -Wait -Argumentlist " stop w3svc"
+      Install-CsDatabase -Update -LocalDatabases
+      }
+Else {
+      write-host "Skype for Business Cumulative Updates Applied." -Foregroundcolor green
+     }
+
+If ((get-service | ? {$_.Name -like 'MSSQL*'}).count -eq 3) {
+      IF ((Test-PendingReboot) -eq $false){
+          write-host "Checking SQL Server Version on RTC." -ForegroundColor Green
+          IF ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").RTC -eq "MSSQL13.RTC"){
+                write-host "Upgrading RTC SQL Server instance to SQL Server 2019." -Foregroundcolor green
+                Stop-CsWindowsService
+                start-process "net " -Wait -Argumentlist " stop w3svc"
+                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTC /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
+####                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist "/silentmode"
+          }
+          Else {
+                write-host "RTC SQL Server instance is SQL Server 2019." -Foregroundcolor green
+               }
+          write-host "Checking SQL Server Version on RTCLOCAL." -ForegroundColor Green
+          IF ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").RTCLOCAL -eq "MSSQL13.RTCLOCAL"){
+                write-host "Upgrading RTCLOCAL SQL Server instance to SQL Server 2019." -Foregroundcolor green
+                Stop-CsWindowsService
+                start-process "net " -Wait -Argumentlist " stop w3svc"
+                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
+          }
+          Else {
+                write-host "RTCLOCAL SQL Server instance is SQL Server 2019." -Foregroundcolor green
+               }
+          write-host "Checking SQL Server Version on LYNCLOCAL." -ForegroundColor Green
+          IF ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").LYNCLOCAL -eq "MSSQL13.LYNCLOCAL"){
+                write-host "Upgrading LYNCLOCAL SQL Server instance to SQL Server 2019." -Foregroundcolor green
+                Stop-CsWindowsService
+                start-process "net " -Wait -Argumentlist " stop w3svc"
+                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=LYNCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
+          }
+          Else {
+                write-host "RTC SQL Server instance is SQL Server 2019." -Foregroundcolor green
+               }
+      }
+    Else {
+    write-host "Reboot Needed." -Foregroundcolor red
+    }
+      }
+Else {
+      write-host "3 SQL Server Instanaces not present or reboot needed." -Foregroundcolor green
+     }
+
+
+
+
+
+EXIT
 
 Write-Host 'Obtaining New Certificate' -ForegroundColor Green
 IF ((get-adgroup -identity "Web Servers").ObjectClass -eq "group") {
@@ -231,21 +353,14 @@ IF ((get-adgroup -identity "Web Servers").ObjectClass -eq "group") {
      $Certificate | FL
     }
 
-IF ((get-fileshare | ? {$_.Name -eq $CSShareName}).count -eq "0") {
-    write-host "Creating CSShare" -Foregroundcolor green
-    [system.io.directory]::CreateDirectory($CSShareNamePath)
-    New-SMBShare -Name $CSShareName -Path $CSShareNamePath -FullAccess "Authenticated Users" -CachingMode None
-    }
-
-
-Write-host "Run Prepare First Standard Edition Server" -ForegroundColor Red
-Write-host "Run Skype For Business Server Topology Builder and successfully Publish Topology" -ForegroundColor Red
 Write-host "Install Local Configuration Store" -ForegroundColor Red
 Write-host "Run Setup or Remove Skype For Business Server Component" -ForegroundColor Red
 
 ####DNS
 
+
 ###First Skype For Business Server
+###"C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" /BootstrapSQLExpress
 #### Bootstrap-CsComputer
 ####  BoostrapSQLExpress
 ####C:\Users\administrator.USS>"C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" /?
