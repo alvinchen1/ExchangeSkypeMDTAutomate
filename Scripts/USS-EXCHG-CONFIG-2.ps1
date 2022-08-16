@@ -252,14 +252,16 @@ Else {
      write-host "Microsoft Exchange Server already installed or reboot needed" -ForegroundColor Green
      }
 
-$Exchange = Get-Package  | ? {$_.Name -like "Microsoft Exchange Server*"}
+$Exchange = Get-Package | ? {$_.Name -like "Microsoft Exchange Server*"}
 If ($Exchange.count -gt '0') {
      write-host "Checking for Exchange" -ForegroundColor Green
      
-     $TargetExchangePSPath = $TargetExchangePath + "\bin\RemoteExchange.ps1"
-     Import-Module $TargetExchangePSPath
-     Connect-ExchangeServer -auto -ClientApplication:ManagementShell
-
+     if ((get-module | ? {$_.Name -eq "RemoteExchange"}).count -eq 0) {
+          write-host "Starting Exchange Management Shell" -ForegroundColor Green
+          $TargetExchangePSPath = $TargetExchangePath + "\bin\RemoteExchange.ps1"
+          Import-Module $TargetExchangePSPath
+          Connect-ExchangeServer -auto -ClientApplication:ManagementShell
+     }
      ####Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
      ####Connect-ExchangeServer -auto -ClientApplication:ManagementShell
      ####Obtain Certificate
@@ -375,17 +377,17 @@ If ($Exchange.count -gt '0') {
           Write-Host 'New Outlook Anywhere External Host Name' -ForegroundColor Red
           Get-OutlookAnywhere | fl ExternalURL
      }
-     #### Add to Web Servers Group
-     #### Reboot Exchange Server
-     #### Need to check for Web Servers Group
-     #### Reboot Exchange Server
-
+     ###### CHECK if there is a cert with the ExchangeURL?
+     ######
      Write-Host 'Obtaining New Certificate' -ForegroundColor Green
-     $Certificate = Get-Certificate -Template $CertTemplate -DNSName $ExchangeMailURL -CertStoreLocation cert:\LocalMachine\My
-     $Certificate | FL
-     Write-Host 'Binding Certificate to Exchange Services' -ForegroundColor Green
-     Enable-ExchangeCertificate -thumbprint $Certificate.certificate.thumbprint -Services IIS,POP,IMAP,SMTP -confirm:$false -force
-     Get-ExchangeCertificate
+     IF ((get-adgroup -identity "Web Servers").ObjectClass -eq "group") {
+          Add-AdGroupMember -identity "Web Servers" -members $env:COMPUTERNAME$
+          $Certificate = Get-Certificate -Template $CertTemplate -DNSName $ExchangeMailURL -CertStoreLocation cert:\LocalMachine\My
+          $Certificate | FL
+          Write-Host 'Binding Certificate to Exchange Services' -ForegroundColor Green
+          Enable-ExchangeCertificate -thumbprint $Certificate.certificate.thumbprint -Services IIS,POP,IMAP,SMTP -confirm:$false -force
+          Get-ExchangeCertificate
+          }
      }
 Else {
       write-host "Exchange Not Installed" -Foregroundcolor green
@@ -395,9 +397,21 @@ Else {
 ###################################################################################################
 #### DNS Entries
 ####       Need to get IP address and name from variables
-enter-pssession 
-Add-DnsServerResourceRecordA -ZoneName $DomainDnsName -name mail -ipv4address 10.10.5.21 -TimeToLive 00:05:00
-exit-pssession
+write-host 'Checking DNS for' $ExchangeMailURL -ForegroundColor Green
+
+$dnsresolve = resolve-dnsname $ExchangeMailURL 2>&1 | out-null
+
+IF ($dnsresolve.count -lt 1) {
+      Install-WindowsFeature RSAT-DNS-Server
+      Import-Module DNSServer
+      $dotDomainDNSName = "." + $DomainDNSName
+      $ExchangeCNAME = $ExchangeMailURL -replace $dotDomainDNSName,""
+      $addomaincontroller = (get-addomaincontroller).name
+      $ExchangeFQDN = ([System.Net.DNS]::GetHostByName($env:computerName)).hostname
+      $DNSZone = get-dnsserverzone -computername $addomaincontroller -name $DomainDNSName
+      Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name $ExchangeCNAME -HostNameAlias $ExchangeFQDN -TimeToLive 00:05:00
+      remove-windowsfeature RSAT-DNS-Server
+      }
 
 ###################################################################################################
 Stop-Transcript
