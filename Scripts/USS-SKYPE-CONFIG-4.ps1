@@ -38,7 +38,7 @@ $SQLServer2019Path = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\SQLServe
 $CSShareName = ($SkypeForBusiness | ? {($_.Name -eq "CSShareName")}).Value
 $CSShareNamePath = ($SkypeForBusiness | ? {($_.Name -eq "CSShareNamePath")}).Value
 $LDAPDomain = ($WS | ? {($_.Name -eq "DomainDistinguishedName")}).Value
-$CertTemplatePrefix = ($WS | ? {($_.Name -eq "DomainName")}).Value
+$CertTemplate = ($WS | ? {($_.Name -eq "DomainName")}).Value + "WebServer"
 
 ###################################################################################################
 ### Start-Transcript
@@ -67,7 +67,7 @@ Start-Transcript -Path $RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log
 ###                   Place in Skype4BusinessCU
 ###         Download Latest SQL Server 2019 Express Offline
 ###                  https://download.microsoft.com/download/7/c/1/7c14e92e-bdcb-4f89-b7cf-93543e7112d1/SQLEXPRADV_x64_ENU.exe
-###                   Place in Skype4BusinessCU
+###                   Place in SQLServer2019
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 clear-host
 
@@ -96,7 +96,6 @@ function Test-PendingReboot
 # =============================================================================
 # MAIN ROUTINE
 # =============================================================================
-
 $WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
 If ($WindowsFeature.count -gt '35') {
    write-host "Windows Server prerequisites already installed" -ForegroundColor Green
@@ -260,11 +259,11 @@ ELSE {
      Write-host "CMS Database already exists." -ForegroundColor Green
 }
 
-Write-host "Run Skype For Business Server Topology Builder, build new topology and successfully publish." -ForegroundColor Red
-
+####Write-host "Run Skype For Business Server Topology Builder, build new topology and successfully publish." -ForegroundColor Red
 
 IF ((get-service | Where {$_.Name -eq 'MSSQL$RTCLOCAL'}).count -eq 0) {
      Write-host "Creating Local Configuration Store." -ForegroundColor Green
+     start-process "netsh" -Wait -Argumentlist ' advfirewall firewall add rule name="SQL Browser" dir=in action=allow protocol=UDP localport=1434'
      start-process "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" -Wait -Argumentlist " /BootstrapLocalMgmt"
      Write-host "Local Configuration Store created.  Importing Configuration into Local Store." -ForegroundColor Green
      $CSConfiguration = Export-CsConfiguration -AsBytes
@@ -282,9 +281,9 @@ ELSE {
 Write-Host 'Obtaining New Certificate' -ForegroundColor Green
 IF ((get-adgroup -identity "Web Servers").ObjectClass -eq "group") {
      Add-AdGroupMember -identity "Web Servers" -members $env:COMPUTERNAME$
-#####     $Certificate = Get-Certificate -Template $CertTemplate -DNSName $ExchangeMailURL -CertStoreLocation cert:\LocalMachine\My
-#####     FQDN, dialin, meet, lyncdiscoverinternal, lyncdiscover, sip, subjectname uss-srv-19.uss.local
-##### Set-CSCertificate -Type Default,WebServicesInternal,WebServicesExternal -Thumbprint 903EDD552405A9293C1A16ED65F64BA79C6604B3 -Confirm:$false -Report "C:\Users\administrator.USS\AppData\Local\Temp\3\Set-CSCertificate-[2022_08_12][14_05_47].html"
+     $SkypeFQDN = ([System.Net.DNS]::GetHostByName($env:computerName)).hostname
+     $Certificate = Get-Certificate -Template $CertTemplate -DNSName $SkypeFQDN,dialin.$DomainDnsName,meet.$DomainDnsName,lyncdiscoverinternal.$DomainDnsName,lyncdiscover.$DomainDnsName,sip.$DomainDnsName -CertStoreLocation cert:\LocalMachine\My -subjectname cn=$SkypeFQDN
+     Set-CSCertificate -Type Default,WebServicesInternal,WebServicesExternal -Thumbprint $Certificate.certificate.thumbprint -Confirm:$false
      $Certificate | FL
     }
 
@@ -296,40 +295,101 @@ If ((get-package | where {($_.Name -like "Skype for Business*") -and ($_.Version
       Install-CsDatabase -Update -LocalDatabases
       }
 Else {
-      write-host "Skype for Business Cumulative Updates Applied." -Foregroundcolor green
+      write-host "Skype for Business not installed or Skype for Business Cumulative Updates already Applied." -Foregroundcolor green
      }
 
 If ((get-service | ? {$_.Name -like 'MSSQL*'}).count -eq 3) {
       IF ((Test-PendingReboot) -eq $false){
           write-host "Checking SQL Server Version on RTC." -ForegroundColor Green
           IF ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").RTC -eq "MSSQL13.RTC"){
-                write-host "Upgrading RTC SQL Server instance to SQL Server 2019." -Foregroundcolor green
-                Stop-CsWindowsService
+                write-host "RTC SQL Server needs to upgrade to SQL Server 2019." -Foregroundcolor green
+                Stop-CsWindowsService -force
                 start-process "net " -Wait -Argumentlist " stop w3svc"
-                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTC /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
+                Start-Sleep -seconds 300
+                IF((Test-PendingReboot) -eq $false){
+                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /q /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTC /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
+                }
+                   ELSE {
+                        write-host "Reboot Needed." -Foregroundcolor red
+                        }
           }
           Else {
                 write-host "RTC SQL Server instance is SQL Server 2019." -Foregroundcolor green
+                write-host "Checking SQL Server Version on RTC for CU." -ForegroundColor Green
+                  IF ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.RTC\Setup").PatchLevel -eq "15.0.2000.5"){
+                        write-host "RTC SQL Server 2019 needs latest CU." -Foregroundcolor green
+                        Stop-CsWindowsService -force
+                        start-process "net " -Wait -Argumentlist " stop w3svc"
+                        IF ((Test-PendingReboot) -eq $false){
+                             start-process $SQLServer2019Path"\SQLServer2019-CU-x64.exe" -Wait -Argumentlist " /q /ACTION=patch /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTC /HIDECONSOLE /ERRORREPORTING=0"
+                             }
+                             ELSE{
+                                 write-host "Reboot Needed." -Foregroundcolor red
+                                 }
+                  }
+                  Else {
+                        write-host "RTC SQL Server 2019 has the latest CU." -Foregroundcolor green
+                       }
                }
           write-host "Checking SQL Server Version on RTCLOCAL." -ForegroundColor Green
           IF ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").RTCLOCAL -eq "MSSQL13.RTCLOCAL"){
-                write-host "Upgrading RTCLOCAL SQL Server instance to SQL Server 2019." -Foregroundcolor green
-                Stop-CsWindowsService
+                write-host "RTCLOCAL SQL Server needs to upgrade to SQL Server 2019." -Foregroundcolor green
+                Stop-CsWindowsService -force
                 start-process "net " -Wait -Argumentlist " stop w3svc"
-                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
+                IF((Test-PendingReboot) -eq $false){
+                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /q /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
+                }
+                   ELSE {
+                        write-host "Reboot Needed." -Foregroundcolor red
+                        }
           }
           Else {
                 write-host "RTCLOCAL SQL Server instance is SQL Server 2019." -Foregroundcolor green
+                write-host "Checking SQL Server Version on RTCLOCAL for CU." -ForegroundColor Green
+                  IF ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.RTCLOCAL\Setup").PatchLevel -eq "15.0.2000.5"){
+                        write-host "RTCLOCAL SQL Server 2019 needs latest CU." -Foregroundcolor green
+                        Stop-CsWindowsService -force
+                        start-process "net " -Wait -Argumentlist " stop w3svc"
+                        IF ((Test-PendingReboot) -eq $false){
+                             start-process $SQLServer2019Path"\SQLServer2019-CU-x64.exe" -Wait -Argumentlist " /q /ACTION=patch /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTCLOCAL /HIDECONSOLE /ERRORREPORTING=0"
+                             }
+                             ELSE{
+                                 write-host "Reboot Needed." -Foregroundcolor red
+                                 }
+                  }
+                  Else {
+                        write-host "RTCLOCAL SQL Server 2019 has the latest CU." -Foregroundcolor green
+                       }
                }
           write-host "Checking SQL Server Version on LYNCLOCAL." -ForegroundColor Green
           IF ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").LYNCLOCAL -eq "MSSQL13.LYNCLOCAL"){
-                write-host "Upgrading LYNCLOCAL SQL Server instance to SQL Server 2019." -Foregroundcolor green
-                Stop-CsWindowsService
+                write-host "LYNCLOCAL SQL Server needs to upgrade to SQL Server 2019." -Foregroundcolor green
+                Stop-CsWindowsService -force
                 start-process "net " -Wait -Argumentlist " stop w3svc"
-                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=LYNCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
+                IF((Test-PendingReboot) -eq $false){
+                start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /q /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=LYNCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
+                }
+                   ELSE {
+                        write-host "Reboot Needed." -Foregroundcolor red
+                        }
           }
           Else {
-                write-host "RTC SQL Server instance is SQL Server 2019." -Foregroundcolor green
+                write-host "LYNCLOCAL SQL Server instance is SQL Server 2019." -Foregroundcolor green
+                write-host "Checking SQL Server Version on LYNCLOCAL for CU." -ForegroundColor Green
+                  IF ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.LYNCLOCAL\Setup").PatchLevel -eq "15.0.2000.5"){
+                        write-host "LYNCLOCAL SQL Server 2019 needs latest CU." -Foregroundcolor green
+                        Stop-CsWindowsService -force
+                        start-process "net " -Wait -Argumentlist " stop w3svc"
+                        IF ((Test-PendingReboot) -eq $false){
+                             start-process $SQLServer2019Path"\SQLServer2019-CU-x64.exe" -Wait -Argumentlist " /q /ACTION=patch /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=LYNCLOCAL /HIDECONSOLE /ERRORREPORTING=0"
+                             }
+                             ELSE{
+                                 write-host "Reboot Needed." -Foregroundcolor red
+                                 }
+                  }
+                  Else {
+                        write-host "LYNCLOCAL SQL Server 2019 has the latest CU." -Foregroundcolor green
+                       }
                }
       }
     Else {
@@ -339,6 +399,31 @@ If ((get-service | ? {$_.Name -like 'MSSQL*'}).count -eq 3) {
 Else {
       write-host "3 SQL Server Instanaces not present or reboot needed." -Foregroundcolor green
      }
+
+
+###################################################################################################
+#### DNS Entries
+####       Need to get IP address and name from variables
+write-host 'Checking DNS for' meet.$DomainDnsName -ForegroundColor Green
+
+$dnsresolve = resolve-dnsname meet.$DomainDnsName 2>&1 | out-null
+
+IF ($dnsresolve.count -lt 1) {
+      Install-WindowsFeature RSAT-DNS-Server
+      Import-Module DNSServer
+      $dotDomainDNSName = "." + $DomainDNSName
+      $addomaincontroller = (get-addomaincontroller).name
+      $SkypeFQDN = ([System.Net.DNS]::GetHostByName($env:computerName)).hostname
+      $DNSZone = get-dnsserverzone -computername $addomaincontroller -name $DomainDNSName
+      Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name dialin -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+      Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name meet -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+      Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name lyncdiscoverinternal -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+      Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name lyncdiscover -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+      Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name sip -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+      Add-DnsServerResourceRecord -Srv -Name "_sipinternaltls._tcp" -ZoneName $DNSZone.ZoneName -DomainName sip.$DomainDnsName -Priority 0 -Weight 0 -Port 5060 -TimeToLive 00:05:00
+      remove-windowsfeature RSAT-DNS-Server
+      }
+
 
 ###################################################################################################
 Stop-Transcript

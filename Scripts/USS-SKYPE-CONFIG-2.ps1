@@ -67,7 +67,10 @@ Start-Transcript -Path $RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log
 ###                   Place in Skype4BusinessCU
 ###         Download Latest SQL Server 2019 Express Offline
 ###                  https://download.microsoft.com/download/7/c/1/7c14e92e-bdcb-4f89-b7cf-93543e7112d1/SQLEXPRADV_x64_ENU.exe
-###                   Place in Skype4BusinessCU
+###                   Place in SQLServer2019
+###         Download Latest SQL Server 2019 Cumulative Update
+###                  https://download.microsoft.com/download/7/c/1/7c14e92e-bdcb-4f89-b7cf-93543e7112d1/SQLEXPRADV_x64_ENU.exe
+###                   Rename to Place in SQLServer2019
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 clear-host
 
@@ -99,6 +102,15 @@ function Test-PendingReboot
 
 ###### Must be separated because Web-Asp-Net, Web-Net-Ext cannot install until after .net Framework 4.8 is installed, server rebooted otherwise get DISMAPI_Error__Failed_To_Enable_Updates,Microsoft.Windows.ServerManager.Commands.AddWindowsFeatureCommand
 
+
+IF ((Get-WindowsFeature -Name NET-Framework-Core | Where {$_.InstallState -eq "Removed"}).count -eq 1) {
+   write-host ".net Framework 3.5 Removed from Windows Server Prerequisites" -Foregroundcolor green
+   start-process "dism.exe" -Wait -Argumentlist " /Online /Enable-Feature /FeatureName:netFX3 /All /LimitAccess /source:$Windows2019SourcePath"
+}
+ELSE{
+   write-host ".net Framework 3.5 Available in Windows Server Prerequisites" -Foregroundcolor green
+}
+
 $WindowsFeature = Get-WindowsFeature -Name Web* | Where Installed
 If ($WindowsFeature.count -gt '34') {
    write-host "Windows Server prerequisites already installed" -ForegroundColor Green
@@ -108,6 +120,7 @@ If ($WindowsFeature.count -gt '34') {
             IF ((Get-ChildItem -Path $Windows2019SourcePath).count -gt 1) {
                 write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
                 Add-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
+#######                Add-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net, Web-Net-Ext, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
                 }
                 Else {
                       write-host ".net Framework SXS not found." -Foregroundcolor red
