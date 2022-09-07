@@ -9,14 +9,16 @@ SYNTAX
     .\$ScriptName
  #>
 
-Start-Transcript
-
 # Declare Variables
 # -----------------------------------------------------------------------------
 $ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
 $ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
+$DTG = Get-Date -Format yyyyMMddTHHmm
 $RootDir = Split-Path $ScriptDir –Parent
 $ConfigFile = "$RootDir\config.xml"
+
+Start-Transcript -Path "$RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log"
+Start-Transcript -Path "$env:WINDIR\Temp\$env:COMPUTERNAME-$DTG-$ScriptName.log"
 
 # Load variables from config.xml
 If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile Exiting..."} 
@@ -25,7 +27,7 @@ $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuratio
 $DomainName = ($WS | ? {($_.Name -eq "DomainName")}).Value
 $PKI = ($XML.Component | ? {($_.Name -eq "PKI")}).Settings.Configuration
 $IssuingCA = ($PKI | ? {($_.Name -eq "IssuingCA")}).Value
-$PkiFolder = ($PKI | ? {($_.Name -eq "PkiFolder")}).Value
+$PkiFolder ="C:\inetpub\PKI"
 $CrlFolder = "$PkiFolder\crl"
 $CpFolder = "$PkiFolder\cp"
 $CAAccountName = "$DomainName\$IssuingCA$"
@@ -51,66 +53,21 @@ Function Check-Role()
     return $windowsPrincipal.IsInRole($role)
 }
 
-Function Check-NTFS
-{
-    Write-Verbose "----- Entering Check-NTFS function -----"
-    
-    If (!(Test-Path $CrlFolder)) 
-    {
-        Write-Verbose -Message "Path does not exist"
-        return $true  
-    }
-    Else
-    {
-        $Acl = (Get-Item $CrlFolder).GetAccessControl('Access')
-        ForEach ($Item in $Acl)
-        {
-            $Ids = $Item | Select-Object -ExpandProperty Access
-            ForEach ($Id in $Ids) 
-            {
-                If ($Id.IdentityReference -like "*$IssuingCA*") 
-                {
-                    Write-Verbose -Message "Permission already exists"
-                    return $true
-                }
-            }
-        }
-        return $false
-    }
-}
-
-Function Config-CRLShare
-{
-    Write-Verbose "----- Entering Config-CRLShare function -----"
-
-    New-SmbShare -Name 'CRL' -Path $CrlFolder -Description "Share for PKI CRLs and Certs"
-    Grant-SmbShareAccess -Name 'CRL' -AccountName $CAAccountName -AccessRight Full -Force
-    Write-Verbose -Message "CRL share is created"
-    $Acl = (Get-Item $CrlFolder).GetAccessControl('Access')
-    $Ar = New-Object System.Security.AccessControl.FileSystemAccessRule($CAAccountName, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-    $Acl.SetAccessRule($Ar)
-    Set-Acl -path $CrlFolder -AclObject $Acl
-    Write-Verbose -Message "ACLs Modified"
-}
-
 # =============================================================================
 # MAIN ROUTINE
 # =============================================================================
 
 If (!(Check-Role)) {Throw "Script is NOT running elevated. Be sure the script runs under elevated conditions."}
 
-# Create PKI Directories 
+# Create PKI share 
 If (!(Test-Path $PkiFolder)) {New-Item $PkiFolder -ItemType Directory}
 If (!(Test-Path $CrlFolder)) {New-Item $CrlFolder -ItemType Directory}
 If (!(Test-Path $CpFolder)) {New-Item $CpFolder -ItemType Directory}
 $CAStatementContent | Out-File "$CpFolder\Root CA.htm" -Force
-
-# Create CRL share and grant Issuing CA computer account access to the share
-If (!(Check-NTFS)) {Config-CRLShare}
+New-SmbShare -Name 'CRL' -Path $CrlFolder -Description "Share for PKI CRLs and Certs"
 
 # Stop the default website
 Import-Module WebAdministration
-#Get-Website 'Default Web Site' | select * | fl 
 Get-Website 'Default Web Site' | Stop-Website
 
 # Create and start PKI website

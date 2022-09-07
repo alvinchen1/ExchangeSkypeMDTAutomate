@@ -9,26 +9,22 @@ SYNTAX
     .\$ScriptName
  #>
 
-Start-Transcript
-
 # Declare Variables
 # -----------------------------------------------------------------------------
 $ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
 $ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
+$DTG = Get-Date -Format yyyyMMddTHHmm
 $RootDir = Split-Path $ScriptDir –Parent
 $ConfigFile = "$RootDir\config.xml"
 
+Start-Transcript -Path "$RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log"
+Start-Transcript -Path "$env:WINDIR\Temp\$env:COMPUTERNAME-$DTG-$ScriptName.log"
+
 # Load variables from config.xml
-If (!(Test-Path -Path $ConfigFile)) 
-{
-    Write-Host "Missing configuration file $ConfigFile" -ForegroundColor Red
-    Stop-Transcript
-    Exit
-}
+If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile Exiting..."}
 $XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
 $DomainName = ($WS | ? {($_.Name -eq "DomainName")}).Value
-$DomainDistinguishedName = ($WS | ? {($_.Name -eq "DomainDistinguishedName")}).Value
 
 $ace0 = $null
 $ace1 = $null
@@ -84,7 +80,7 @@ Check-Prereqs
 $TemplateObjects = Get-ADCSTemplate | where {$_.DisplayName -like "$DomainName*"}
 $TemplateObjects += Get-ADCSTemplate | where {$_.DisplayName -eq "RDS"}
 
-ForEach ($TemplateObject in $TemplateObjects){
+ForEach ($TemplateObject in $TemplateObjects) {
     $templateName = $TemplateObject.Name
     $TemplateDN = $TemplateObject.DistinguishedName
     $template = Get-ADObject ($TemplateDN) -ErrorAction SilentlyContinue
@@ -98,6 +94,7 @@ ForEach ($TemplateObject in $TemplateObjects){
         Write-Verbose -Message "...Remove: $aceToRemove.IdentityReference"
         $acl.RemoveACcessRule($aceToRemove)
     }
+    
     # Break inheritance and remove other ACEs inherited from CN=Certificate Templates
     $acl.SetAccessRuleProtection($true, $false)
     Write-Verbose -Message "...Disable Inherited Permissions"
@@ -113,7 +110,7 @@ ForEach ($TemplateObject in $TemplateObjects){
     $groupSid = new-object System.Security.Principal.SecurityIdentifier $group.SID
     $ace1 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner","Allow","None",$nullGUID
    
-    If($templateName -like "*DomainController*")
+    If ($templateName -like "*DomainController*")
     {
         #DCs
         $group = (Get-ADGroup "Domain Controllers")
@@ -138,7 +135,7 @@ ForEach ($TemplateObject in $TemplateObjects){
         $ace7 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericExecute","Allow",$nullGUID,"None",$nullGUID
     }
 
-    If($templateName -like "*Workstation*")
+    If ($templateName -like "*Workstation*")
     {
         $group = (Get-ADGroup "Domain Computers")
         $groupSid = new-object System.Security.Principal.SecurityIdentifier $group.SID
@@ -151,7 +148,7 @@ ForEach ($TemplateObject in $TemplateObjects){
         $ace4 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericExecute","Allow",$nullGUID,"None",$nullGUID
     }
 
-    If($templateName -like "*User*")
+    If ($templateName -like "*User*")
     {
         $group = (Get-ADGroup "Domain Users")
         $groupSid = new-object System.Security.Principal.SecurityIdentifier $group.SID
@@ -166,7 +163,7 @@ ForEach ($TemplateObject in $TemplateObjects){
         $ace4 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericExecute","Allow",$nullGUID,"None",$nullGUID
     }
 
-    If($templateName -like "*WebServer*")
+    If ($templateName -like "*WebServer*")
     {
         # Enroll Permissions
         $group = (Get-ADGroup "Web Servers")
@@ -179,7 +176,7 @@ ForEach ($TemplateObject in $TemplateObjects){
         $ace3 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericExecute","Allow",$nullGUID,"None",$nullGUID
     }
 
-    If($templateName -eq "RDS")
+    If ($templateName -eq "RDS")
     {
         $group = (Get-ADGroup "Domain Computers")
         $groupSid = new-object System.Security.Principal.SecurityIdentifier $group.SID
@@ -205,12 +202,13 @@ ForEach ($TemplateObject in $TemplateObjects){
 
     $acl.AddAccessRule($ace0)
     $acl.AddAccessRule($ace1)
-    If(!($ace2 -eq $null)){$acl.AddAccessRule($ace2)}
-    If(!($ace3 -eq $null)){$acl.AddAccessRule($ace3)}
-    If(!($ace4 -eq $null)){$acl.AddAccessRule($ace4)}
-    If(!($ace5 -eq $null)){$acl.AddAccessRule($ace5)}
-    If(!($ace6 -eq $null)){$acl.AddAccessRule($ace6)}
-    If(!($ace7 -eq $null)){$acl.AddAccessRule($ace7)}
+    If (!($ace2 -eq $null)){$acl.AddAccessRule($ace2)}
+    If (!($ace3 -eq $null)){$acl.AddAccessRule($ace3)}
+    If (!($ace4 -eq $null)){$acl.AddAccessRule($ace4)}
+    If (!($ace5 -eq $null)){$acl.AddAccessRule($ace5)}
+    If (!($ace6 -eq $null)){$acl.AddAccessRule($ace6)}
+    If (!($ace7 -eq $null)){$acl.AddAccessRule($ace7)}
+    
     # Update the ACL on the Template
     Set-Acl -Path "AD:$template" -AclObject $acl
 
@@ -228,7 +226,7 @@ ForEach ($TemplateObject in $TemplateObjects){
 
 # Restart service
 $service = Get-Service | Where-Object {$_.Name -eq "certsvc"}
-If($service.Status -eq "Running") {Restart-Service $service}
+If ($service.Status -eq "Running") {Restart-Service $service}
 Else {Start-Service $service}
 
 Stop-Transcript

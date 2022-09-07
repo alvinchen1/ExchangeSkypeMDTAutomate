@@ -12,9 +12,9 @@ SYNTAX
 
 # Declare Variables
 # -----------------------------------------------------------------------------
-$ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
-$ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
-$RootDir = Split-Path $ScriptDir –Parent
+$ScriptName = Split-Path $MyInvocation.MyCommand.Path ï¿½Leaf
+$ScriptDir = Split-Path $MyInvocation.MyCommand.Path ï¿½Parent
+$RootDir = Split-Path $ScriptDir ï¿½Parent
 $ConfigFile = "$RootDir\config.xml"
 
 # Load variables from config.xml
@@ -58,7 +58,6 @@ $DC = (Get-ADDomainController -Filter * | Select-Object Name | Sort-Object Name 
 ###         https://docs.microsoft.com/en-us/exchange/plan-and-deploy/prerequisites?view=exchserver-2019
 ###
 ###     Known post steps as of 8/10/2022
-###         Add Computer Account to Web Services Group (after Certificate Authority has been installed)
 ###         Add product key Set-ExchangeServer <ServerName> -ProductKey <ProductKey>
 ###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 clear-host
@@ -83,9 +82,16 @@ Function Check-Role()
 Function Test-ADObject ($DN)
 {
     Write-Host "Checking existence of $DN"
-    $ADCheck = [bool] (Get-ADObject "$DN")
-    Write-Host $ADCheck
-    return $ADCheck
+    Try 
+    {
+        Get-ADObject "$DN"
+        Write-Host "True"
+    }
+    Catch 
+    {
+        $null
+        Write-Host "False"
+    }
 }
 
 Function Get-ADSchemaObjects
@@ -187,12 +193,6 @@ Set-XADPrep
 
 # Install Exchange
 
-
-
-
-
-####$Exchange = Get-Package -Name 'Microsoft Exchange Server' 2>&1 | out-null
-####$Exchange = Get-Package -Name 'Microsoft Exchange Server' 
 $Exchange = Get-Package  | ? {$_.Name -like "Microsoft Exchange Server"}
 If ($Exchange.count -eq '0' -and (Test-PendingReboot) -eq $false) {
      write-host "Installing Exchange 2019" -Foregroundcolor green
@@ -212,9 +212,6 @@ If ($Exchange.count -gt '0') {
           Import-Module $TargetExchangePSPath
           Connect-ExchangeServer -auto -ClientApplication:ManagementShell
      }
-     ####Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
-     ####Connect-ExchangeServer -auto -ClientApplication:ManagementShell
-     ####Obtain Certificate
      Write-Host 'Checking OWA Virtual Directories InternalURL' -ForegroundColor Green
      If ((Get-OwaVirtualDirectory | ? {$_.InternalURL -notlike $OWAVirtualDirectory}).count -gt 0) {
           Get-OwaVirtualDirectory | ? {$_.InternalURL -notlike $OWAVirtualDirectory} | fl InternalURL
@@ -343,16 +340,7 @@ Else {
       write-host "Exchange Not Installed" -Foregroundcolor green
      }
 
-
-###################################################################################################
-#### DNS Entries
-####       Need to get IP address and name from variables
 write-host 'Checking DNS for' $ExchangeMailURL -ForegroundColor Green
-
-# Create CNAME for Mail
-#$TestDNS = Get-DnsServerResourceRecord -ZoneName $DomainDnsName -Name "pki" -RRType CName -ErrorAction "SilentlyContinue"
-#If(!($TestDNS)) {Add-DnsServerResourceRecordCName -Name "pki" -HostNameAlias $CDPFQDN -ZoneName $DomainDnsName}
-
 $dnsresolve = resolve-dnsname $ExchangeMailURL 2>&1 | out-null
 
 IF ($dnsresolve.count -lt 1) {
@@ -365,8 +353,6 @@ IF ($dnsresolve.count -lt 1) {
       Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name $ExchangeCNAME -HostNameAlias $ExchangeFQDN -TimeToLive 00:05:00
       write-host 'Creating DNS for' $ExchangeMailURL -ForegroundColor Green
       }
-
-
 
 Stop-Transcript
 

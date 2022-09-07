@@ -20,7 +20,6 @@ $ConfigFile = "$RootDir\config.xml"
 If (!(Test-Path -Path $ConfigFile)) 
 {
     Write-Host "Missing configuration file $ConfigFile" -ForegroundColor Red
-### Stop-Transcript
     Exit
 }
 
@@ -142,7 +141,7 @@ If ($BootStrapCore.count -eq '0') {
       start-process $Skype4BusinessPath"\Setup\amd64\setup.exe" -Wait -Argumentlist "/bootstrapcore"
       }
 Else {
-      write-host "Skype for Business Server detected, skipping bootstrap core" -Foregroundcolor green
+      write-host "Skype for Business Server Core Components detected, skipping bootstrap core" -Foregroundcolor green
      }
 
 ####
@@ -262,7 +261,7 @@ ELSE {
      Write-host "CMS Database already exists." -ForegroundColor Green
 }
 
-Write-host "Run Skype For Business Server Topology Builder, build new topology and successfully publish." -ForegroundColor Red
+Write-host "Run Skype For Business Server Topology Builder, build new topology and successfully publish. See Document in $ScriptDir" -ForegroundColor Red
 ###################################################################################################
 Stop-Transcript
 exit

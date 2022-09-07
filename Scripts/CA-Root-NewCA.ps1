@@ -19,21 +19,17 @@ OUTPUTS
    even if we are not connected to the environment.
  #>
 
-Start-Transcript
-
 # Declare Variables
 # -----------------------------------------------------------------------------
 $ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
-$ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
+$DTG = Get-Date -Format yyyyMMddTHHmm
 $ConfigFileName = $MyInvocation.MyCommand.Path.Replace("ps1","config")
 
+Start-Transcript -Path "$RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log"
+Start-Transcript -Path "$env:WINDIR\Temp\$env:COMPUTERNAME-$DTG-$ScriptName.log"
+
 # Load variables from config.xml
-If (!(Test-Path -Path $ConfigFileName)) 
-{
-    Write-Host "Missing configuration file $ConfigFileName" -ForegroundColor Red
-    Stop-Transcript
-    Exit
-}
+If (!(Test-Path -Path $ConfigFileName)) {Throw "ERROR: Unable to locate $ConfigFile Exiting..."} 
 [XML]$ConfigFile = Get-Content $ConfigFileName
 $AiaDir = $ConfigFile.Settings.Directories.AIA
 $CaBackupCMDFileName = $ConfigFile.Settings.Directories.Script + "\BackupCA.cmd"
@@ -62,7 +58,7 @@ Function Install-RootCA
     }
 
     # Create CAPolicy.INF in Windows diectory
-    if (!(Test-Path C:\Windows\CAPolicy.inf))
+    If (!(Test-Path C:\Windows\CAPolicy.inf))
     {
         New-Item -Path $env:windir\CAPolicy.inf -ItemType File -Force
         Add-Content -Path $env:windir\CAPolicy.inf -Value $ConfigFile.Settings.CAPolicyInf
@@ -72,7 +68,7 @@ Function Install-RootCA
     auditpol /set /subcategory:"Certification services" /success:enable /failure:enable
 
     # Install AD certification service
-    if (!(Get-WindowsFeature -Name ADCS-Cert-Authority).Installed)
+    If (!(Get-WindowsFeature -Name ADCS-Cert-Authority).Installed)
     {
         Add-WindowsFeature -Name ADCS-Cert-Authority -IncludeManagementTools  
         Install-AdcsCertificationAuthority -CACommonName $ConfigFile.Settings.CAParameter.CACommonName -CAType StandaloneRootCA -CryptoProviderName $ConfigFile.Settings.CAParameter.CryptoProvider -HashAlgorithm $ConfigFile.Settings.CAParameter.HashAlgorithm -KeyLength $configFile.Settings.CAParameter.KeyLength -Databasedirectory $ConfigFile.Settings.Directories.CADatabase -logDirectory $ConfigFile.Settings.Directories.CADatabase -ValidityPeriod $ConfigFile.Settings.CAParameter.ValidityPeriod -ValidityPeriodUnits $ConfigFile.Settings.CAParameter.ValidityPeriodUnits -OverwriteExistingKey -OverwriteExistingDatabase -Verbose -Force
@@ -89,6 +85,7 @@ Function Install-RootCA
     certutil -setreg CA\CACertPublicationURLs $ConfigFile.Settings.AIA.PubPath
     certutil -setreg CA\ValidityPeriod $ConfigFile.Settings.SubCA.ValidityPeriod
     certutil -setreg CA\ValidityPeriodUnits $ConfigFile.Settings.SubCA.ValidityPeriodUnits
+    certutil –setreg CA\AuditFilter 127
     Restart-Service certsvc
 
     Copy-Item $env:windir\System32\certSrv\CertEnroll\*.crt $ConfigFile.Settings.Directories.AIA
@@ -119,6 +116,26 @@ Function Export-RootCert
     certutil -encode C:\PKIData\RootCA_Base64.cer C:\PKIData\RootCA_Base64.crt
 }
 
+Function Check-PKIHealthStatus
+{
+    Write-Verbose "----- Entering Check-PKIHealthStatus function -----"
+    
+    # Get standalone Root CA's health status
+    Import-Module -Name PSPKI
+    $HealthStatus = (Get-CertificationAuthority -ComputerName $env:COMPUTERNAME -ErrorAction SilentlyContinue).IsAccessible
+    If (!($HealthStatus))
+    {
+        $service = Get-Service | Where-Object {$_.Name -eq "certsvc"}
+        If ($service.Status -eq "Running") {Restart-Service certsvc}
+        Else {Start-Service certsvc}
+    }
+    $HealthStatus = (Get-CertificationAuthority -ComputerName $env:COMPUTERNAME -ErrorAction SilentlyContinue).IsAccessible
+    If (!($HealthStatus))
+    {
+        Write-Host "Certificate Services is in a faulty state! Run pkiview.msc or certsrv.msc and restore the health of the CA" -ForegroundColor Red -BackgroundColor Yellow
+    }
+}
+
 # =============================================================================
 # MAIN ROUTINE
 # =============================================================================
@@ -126,5 +143,6 @@ Function Export-RootCert
 Install-RootCA
 Backup-RootCA
 Export-RootCert
+Check-PKIHealthStatus
 
 Stop-Transcript

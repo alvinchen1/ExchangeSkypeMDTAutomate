@@ -16,7 +16,7 @@
 #
 # *** Before runnng this script ensure that the following drive exist on the MECM Site server ***
 #
-# (C:)(120gb+) OS - Page file (4k, NTFS)
+# (C:)(510gb+) OS - Page file (4k, NTFS)
 # (D:)(30gb+) EXCHG-BIN - (4k, NTFS)
 # (E:)(500gb+) EXCHG-DB - (4k, NTFS)
 # (F:)(40gb+) EXCHG-LOGS - (64k BlockSize, ReFS)
@@ -40,17 +40,17 @@ Start-Transcript -Path $RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log
 # Stop-Transcript
 # Overwrite existing log.
 ###Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-EXCHG-CONFIG-1.log
-###Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-EXCHG-CONFIG-1.log
+###Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-EXCHG-CONFIG-1.log
 
 
 ###################################################################################################
 ### MODIFY These Values
 ### ENTER WSUS MGMT NIC IP Addresses Info
-$MECM_MGMT_IP = "10.10.5.21"
-$DNS1 = "10.10.5.11"
-$DNS2 = "10.10.5.12"
-$DEFAULTGW = "10.10.5.1"
-$PREFIXLEN = "25" # Set subnet mask /24, /25
+$MECM_MGMT_IP = "10.1.102.59"
+$DNS1 = "10.1.102.50"
+$DNS2 = "10.1.102.51"
+$DEFAULTGW = "10.1.102.1"
+$PREFIXLEN = "24" # Set subnet mask /24, /25
 
 ###################################################################################################
 Write-Host -foregroundcolor green "Configure NICs..."
@@ -70,7 +70,7 @@ Get-netadapter NIC_MGMT1_1GB | get-netipaddress –addressfamily ipv4 | remove-n
 Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $MECM_MGMT_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
 
 ### Set the MGMT NIC DNS Addresses
-# Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses '10.10.5.11','10.10.5.12'
+# Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses '10.1.102.50','10.1.102.51'
 Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2
 
 ###################################################################################################
