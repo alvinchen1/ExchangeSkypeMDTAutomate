@@ -20,7 +20,6 @@ $ConfigFile = "$RootDir\config.xml"
 If (!(Test-Path -Path $ConfigFile)) 
 {
     Write-Host "Missing configuration file $ConfigFile" -ForegroundColor Red
-### Stop-Transcript
     Exit
 }
 
@@ -41,9 +40,6 @@ $LDAPDomain = ($WS | ? {($_.Name -eq "DomainDistinguishedName")}).Value
 $CertTemplatePrefix = ($WS | ? {($_.Name -eq "DomainName")}).Value
 
 ###################################################################################################
-### Start-Transcript
-### Stop-Transcript
-### Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\$ScriptName.log
 Start-Transcript -Path $RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log
 
@@ -120,7 +116,6 @@ If ($WindowsFeature.count -gt '34') {
             IF ((Get-ChildItem -Path $Windows2019SourcePath).count -gt 1) {
                 write-host "Installing Windows Server Prerequisites" -Foregroundcolor green
                 Add-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
-#######                Add-WindowsFeature RSAT-ADDS, Web-Server, Web-Static-Content, Web-Default-Doc, Web-Http-Errors, Web-Asp-Net, Web-Net-Ext, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, Web-Http-Tracing, Web-Basic-Auth, Web-Windows-Auth, Web-Client-Auth, Web-Filtering, Web-Stat-Compression, Web-Dyn-Compression, NET-WCF-HTTP-Activation45, Web-Asp-Net45, Web-Mgmt-Tools, Web-Scripting-Tools, Web-Mgmt-Compat, Windows-Identity-Foundation, Server-Media-Foundation, Telnet-Client, BITS, ManagementOData, Web-Mgmt-Console, Web-Metabase, Web-Lgcy-Mgmt-Console, Web-Lgcy-Scripting, Web-WMI, Web-Scripting-Tools, Web-Mgmt-Service -Source $Windows2019SourcePath
                 }
                 Else {
                       write-host ".net Framework SXS not found." -Foregroundcolor red
