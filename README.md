@@ -1,4 +1,11 @@
 # Task Sequence
+See https://github.com/alvinchen1/OTCMDTAutomate/blob/main/Control/TaskSequences.docx for MDT TS export catalog to correlate scripted MDT flow in the XML
+Tip: TS ID in doc corresponds to folder name in the Control folder where one can see the flow in the XML
+     Each subfolder should have a ts.xml that contains the logical flow of the TS
+     Inside each ts.xml, relevant areas are lines with:
+     <action>cmd.exe /c start /wait powershell.exe -executionpolicy bypass -File "%SCRIPTROOT%\USS-*.ps1"</action>
+
+The rest of this README needs to be updated accordingly and server names and roles have changed over time
 
 ## Every server needs USS-OS-PREP-1.ps1
 
@@ -7,7 +14,7 @@
 - USS-ADM-CONFIG-2.ps1
 - USS-ADM-CREATE-VMs.ps1
 
-### USS-SRV-11
+### USS-SRV-50
 - USS-AD-CONFIG-1.ps1
 - USS-AD-CONFIG-2.ps1
 - USS-AD-CONFIG-3.ps1
@@ -24,11 +31,8 @@
 
 ### We may be able to run the rest in parallel. Need to check if 17/18 and 22/23 have dependencies
 
-### USS-SRV-12
+### USS-SRV-51
 - USS-AD-CONFIG-4.ps1
-
-### USS-SRV-13
-- USS-DSC-CONFIG-1
 
 ### USS-SRV-14
 - USS-EXCHG-CONFIG-1.ps1
@@ -42,7 +46,7 @@
 ### USS-SRV-15
 - USS-DHCP-CONFIG-1.ps1
 
-### USS-SRV-16
+### USS-SRV-54
 - USS-WSUS-CONFIG-1.ps1
 - USS-WSUS-CONFIG-2.ps1
 
