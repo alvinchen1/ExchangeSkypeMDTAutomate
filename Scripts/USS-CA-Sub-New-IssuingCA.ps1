@@ -249,9 +249,6 @@ Function Test-CDP
     Write-Host "`nhttp://pki/crl/RootCA_Base64.crt"
     (Invoke-WebRequest http://pki/crl/RootCA_Base64.crt -UseBasicParsing).StatusDescription
 
-    #Write-Host "`nhttp://pki/crl/$DomainName%20Issuing%20CA.crl"
-    #(Invoke-WebRequest http://pki/crl/$DomainName%20Issuing%20CA.crl -UseBasicParsing).StatusDescription
-
     Write-Host "`nhttp://pki/crl/$DomainName%20Issuing%20CA.crt"
     (Invoke-WebRequest http://pki/crl/$DomainName%20Issuing%20CA.crt -UseBasicParsing).StatusDescription
 
@@ -305,7 +302,6 @@ Set-RegistryKeys
 Export-SubCACert
 
 Copy-Item -Path C:\Windows\System32\CertSrv\CertEnroll\*.* -Destination C:\PKIData -Force
-#Copy-Item -Path "C:\PKIData\$DomainName Issuing CA.crl" -Destination "C:\inetpub\PKI\crl" -Force -ToSession $SessionCDP
 Copy-Item -Path "C:\PKIData\RootCA_Base64.crt" -Destination "C:\inetpub\PKI\crl" -Force -ToSession $SessionCDP
 Copy-Item -Path "C:\PKIData\$DomainName IssuingCA_Base64.crt" -Destination "C:\inetpub\PKI\crl" -Force -ToSession $SessionCDP
 

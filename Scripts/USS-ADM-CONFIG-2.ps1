@@ -15,16 +15,16 @@
 # Stop-Transcript
 # Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-ADM-CONFIG-2.log
-Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-ADM-CONFIG-2.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-ADM-CONFIG-2.log
 
 
 ###################################################################################################
 # MODIFY/ENTER These Values
 
 ### ENTER/SET the following variable before running this script.
-$vSWITCH_IP = "10.10.5.49"
-$DEFAULTGW = "10.10.5.1"
-$PREFIXLEN = "25" # Set subnet mask /24, /25
+# $vSWITCH_IP = "10.10.5.49"
+# $DEFAULTGW = "10.10.5.1"
+# $PREFIXLEN = "25" # Set subnet mask /24, /25
 
 ##################################################################################################
 ########## Create a HYPER-V VIRTUAL SWITCH on a "PHYSICAL" Machine
@@ -33,8 +33,10 @@ New-VMSwitch -name vSwitch-External  -NetAdapterName TEAM_VM -AllowManagementOS 
 ### Set VM TEAMED NICs IP Address VM TEAMED NIC ###############################################################
 # The direct connect linked NIC ports (Cluster/Storage/LIVMIG) are not teamed.
 # Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress '10.10.5.34' -AddressFamily IPv4 -PrefixLength 25 –defaultgateway '10.10.5.1' -Confirm:$false
-Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress $vSWITCH_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
 
+<# Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress $vSWITCH_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
+
+# Get-NetAdapter vether* | Remove-VMNetAdapter -Confirm:$false
 
 ##################################################################################################
 ### Unregister/Uncheck "Register this connection's addresses" 
@@ -62,6 +64,8 @@ Disable-NetAdapterBinding -Name "vEthernet (vSwitch-External)" -ComponentID ms_t
 Disable-NetAdapterBinding -Name "vEthernet (vSwitch-External)" -ComponentID ms_lltdio # Link-Layer Topology Discovery Mapper I/O Driver    
 Disable-NetAdapterBinding -Name "vEthernet (vSwitch-External)" -ComponentID ms_rspndr # Link-Layer Topology Discovery Responder            
 
+#>
+
 ###################################################################################################
 ##### ADD DEFENDER HYPER-V Exclusions
 # Add Defender File Exclusions
@@ -80,8 +84,6 @@ Add-MpPreference -ExclusionExtension ".vmrs" -Force
 # The $Env:<Variable> is used to convert the environment variable in the OS.If you just use %WINDIR% in PS it will not translate it.
 Add-MpPreference -ExclusionPath "C:\VM_C" -Force
 Add-MpPreference -ExclusionPath "D:\VM_D" -Force
-Add-MpPreference -ExclusionPath "E:\VM_E" -Force
-Add-MpPreference -ExclusionPath "F:\VM_F" -Force
 Add-MpPreference -ExclusionPath "$Env:ProgramData\Microsoft\Windows\Hyper-V" -Force
 Add-MpPreference -ExclusionPath "$Env:ProgramFiles\Hyper-V" -Force
 Add-MpPreference -ExclusionPath "$Env:SystemDrive\ProgramData\Microsoft\Windows\Hyper-V\Snapshots" -Force

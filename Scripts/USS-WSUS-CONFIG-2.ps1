@@ -10,6 +10,8 @@
 # -Create the WSUS IMPORT folder
 # -Finish WSUS Install and Configuation
 # -Set WSUS Application Pool Maximum Private memory
+# -COPY WSUS STAGING FOLDER TO LOCAL DRIVE
+# -Install SQL_SERVER_2014_EXPRESS_x64
 # -ADD DEFENDER WSUS Exclusions
 
 # *** Before runnng this script ensure that the following drive exist on the WSUS server:
@@ -22,30 +24,38 @@
 # Stop-Transcript
 # Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-WSUS-CONFIG-2.log
-Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\USS-WSUS-CONFIG-2.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-WSUS-CONFIG-2.log
 
 
 ###################################################################################################
 # MODIFY/ENTER These Values Before Running This Script.
-
-### ENTER WSUS CONTENT Drive.
-# 
-$WSUS_CONT_DRV = "E:\WSUS"
-
+#
 ## Set the followng variables in this script below.
-#   -$SCCMFOLDER = the SCCMShare content folder (on USS-SRV-16)...it could be D: or E:...Update accordingly
+#   -$SCCMFOLDER = the SCCMShare content folder (on USS-SRV-54)...it could be D: or E:...Update accordingly
 #   -$NETACCT = Network Access Account that will be used for OSD
 #   $MECMSRV = SCCM SITE server
 #   $SCCMCONTENT = SCCM Content server.
-
 $NETACCT = "SVC-CM-NAA"
-$SCCMCONTENT = "USS-SRV-16$"
-$MECMSRV = "USS-SRV-14$"
+$SCCMCONTENT = "USS-SRV-54$"
+$MECMSRV = "USS-SRV-52$"
 $SCCMFOLDER = "D:\SCCMSHARE"
 
+### ENTER WSUS CONTENT Drive.
+$WSUS_CONT_DRV = "E:\WSUS"
+
+### ENTER SCCM STAGING FOLDER
+$MDTSTAGING = "\\DEP-MDT-01\STAGING"
+
 ### Create the WSUS IMPORT folder #################################################################
-Write-Host -foregroundcolor green "Creating the WSUS IMPORT folder..."
-New-Item D:\WSUSImports –Type Directory
+# Write-Host -foregroundcolor green "Creating the WSUS IMPORT folder..."
+# New-Item D:\WSUSImports –Type Directory
+
+
+### COPY WSUS FOLDER TO LOCAL DRIVE ###########################################################################
+#
+Write-Host -foregroundcolor green "Copying WSUS/SCCMShare folders to D:\ and E:\"
+Copy-Item C:\WSUS_STAGING\WSUSImports -Destination D:\ -Recurse
+Copy-Item $MDTSTAGING\SCCMShare -Destination D:\ -Recurse
 
 ########################### Finish WSUS Install and Configuation ##################################
 # & ‘C:\Program Files\Update Services\Tools\WsusUtil.exe’ postinstall content_dir=D:\WSUS
@@ -60,11 +70,11 @@ Start-Sleep -s 30
 #
 # If SQL server is installed on the default SQL instance (MSSQLSERVER) on the local server...run this:
 # Note this is when the SUSDB is created in the SQL Instance and when the WSUS folder is created in the file system.
-# & ‘C:\Program Files\Update Services\Tools\WsusUtil.exe’ postinstall SQL_INSTANCE_NAME="HK-SRV-14\" content_dir=E:\WSUS
+# & ‘C:\Program Files\Update Services\Tools\WsusUtil.exe’ postinstall SQL_INSTANCE_NAME="HK-SRV-52\" content_dir=E:\WSUS
 #
 # If SQL server is installed on a remote SQL server instance (MSSQLSERVER or SCCM) include the remote server name and SQL instance:
 # Note this is when the SUSDB is created in the SQL Instance and when the WSUS folder is created in the file system.
-# & ‘C:\Program Files\Update Services\Tools\WsusUtil.exe’ postinstall SQL_INSTANCE_NAME="HK-SRV-14\" content_dir=E:\WSUS
+# & ‘C:\Program Files\Update Services\Tools\WsusUtil.exe’ postinstall SQL_INSTANCE_NAME="HK-SRV-52\" content_dir=E:\WSUS
 #
 # Set Application Pool Maximum Private memory - Set the Private Memory Limit to 4-8GB (4,000,000 KB)...Or "0" for unlimited.
 #
@@ -76,11 +86,18 @@ Start-Sleep -s 30
 Write-Host -foregroundcolor green "Set WSUS Application Pool Maximum Private memory (4GB)..."
 Set-WebConfiguration "/system.applicationHost/applicationPools/add[@name='WsusPool']/recycling/periodicRestart/@privateMemory" -Value 4000000
 
+
+### COPY WSUS CONTENT FOLDER TO WSUSCONTENT FOLDER ###########################################################################
+#
+Write-Host -foregroundcolor green "Copying WSUSContent folders to E:\WSUS\WSUSContent"
+Copy-Item C:\WSUS_STAGING\WSUSImports\WsusContent\* -Destination E:\WSUS\WsusContent -Recurse
+
+
 ###################################################################################################
 ############# Create the SCCM Share Folders #######################################################
-# The AUSS-SRV-16 server will be used as the SCCMShare server
+# The AUSS-SRV-54 server will be used as the SCCMShare server
 #
-# Run this script on the SCCM SHARE/CONTENT SERVER (AUSS-SRV-16).
+# Run this script on the SCCM SHARE/CONTENT SERVER (AUSS-SRV-54).
 #
 # Run this script in an *** "Administrators session" *** of PowerShell ISE
 #
@@ -93,7 +110,7 @@ Set-WebConfiguration "/system.applicationHost/applicationPools/add[@name='WsusPo
 ### Create the SCCM SHARE folder
 Write-Host -foregroundcolor green "Creating the SCCM SHARE folder..."
 
-New-Item $SCCMFOLDER –Type Directory
+# New-Item $SCCMFOLDER –Type Directory
 Get-Acl $SCCMFOLDER | Format-List
 
 $acl = Get-Acl $SCCMFOLDER
@@ -139,6 +156,69 @@ $FullAccessAccts = (“Administrators”,”$NETACCT”,"$SCCMCONTENT","$MECMSRV
 #New-SMBShare –Name “Shared” –Path “C:\Shared” –FullAccess “Administrators”
 New-SMBShare –Name “SCCMSHARE” –Path “$SCCMFOLDER” –FullAccess $FullAccessAccts
 
+
+###################################################################################################
+### Install SQL_SERVER_2014_EXPRESS_x64
+# Install the TOOLS option only.
+# This command can be used to provide the SQLCMD command used to configure WSUS Custom indexes.
+#
+# Write-Host -foregroundcolor green "Istalling SQL_SERVER_2014_EXPRESS_x64..."
+# Start-Process -Wait -FilePath "C:\WSUSMaint\SQL_SERVER_2014_EXPRESS_x64\InstallSQL2014Express.cmd"
+
+
+###################################################################################################
+########################## INSTALL PREREQISITES FOR SQLCMD
+# REBOOT SERVER AFTER THESE COMMAND INSTALLS
+#
+# Note a Server Reboot is needed after this command. If you don't the SQLCMD command may fail.
+# REBOOT AFTER THIS COMMAND.
+#
+### INSTALL Visual C++ Redistributable for Visual Studio 2019 (x64)
+C:\WSUS_STAGING\SQLCMD\VC_redist.x64.exe /passive /norestart
+Start-Sleep -Seconds 15
+
+### INSTALL Microsoft ODBC Driver <17> for SQL Server
+# Start-Process -Wait C:\MECM_CB_2203\AdminConsole_2203\AdminConsole.msi -ArgumentList 'INSTALL=ALL ALLUSERS=1 TARGETDIR="D:\MECM\AdminConsole" DEFAULTSITESERVERNAME=USS-SRV-14.USS.LOCAL ADDLOCAL="AdminConsole,SCUIFramework" /passive /norestart'
+# Start-Process -Wait C:\WSUSMaint\SQLCMD\msodbcsql.msi -ArgumentList 'IACCEPTMSODBCSQLLICENSETERMS=YES /passive /norestart'
+
+$argumentList = @(
+  '/i'
+  '"{0}"' -f "C:\WSUS_STAGING\SQLCMD\msodbcsql.msi"
+  '/passive'
+  '/norestart'
+  'IACCEPTMSODBCSQLLICENSETERMS=YES'
+  )
+
+$startArgs = @{
+  "FilePath" = "msiexec.exe"
+  "ArgumentList" = $argumentList
+  "Wait" = $true
+}
+Start-Process @startArgs
+
+###
+###### INSTALL Microsoft Command Line Utilies <15> for SQL Server
+# Start-Process -Wait C:\MECM_CB_2203\AdminConsole_2203\AdminConsole.msi -ArgumentList 'INSTALL=ALL ALLUSERS=1 TARGETDIR="D:\MECM\AdminConsole" DEFAULTSITESERVERNAME=USS-SRV-14.USS.LOCAL ADDLOCAL="AdminConsole,SCUIFramework" /passive /norestart'
+# Start-Process -Wait C:\WSUSMaint\SQLCMD\MsSqlCmdLnUtils.msi -ArgumentList '/passive /norestart'
+
+$argumentList = @(
+  '/i'
+  '"{0}"' -f "C:\WSUS_STAGING\SQLCMD\MsSqlCmdLnUtils.msi"
+  '/passive'
+  '/norestart'
+  'IACCEPTMSSQLCMDLNUTILSLICENSETERMS=YES'
+)
+
+$startArgs = @{
+  "FilePath" = "msiexec.exe"
+  "ArgumentList" = $argumentList
+  "Wait" = $true
+}
+Start-Process @startArgs
+
+
+
+<#
 # Create the SCCM Share sub Folders
 # New-Item $SCCMFOLDER –Type Directory
 Write-Host -foregroundcolor green "Create the SCCM Share Sub Folders..."
@@ -156,6 +236,9 @@ New-Item $SCCMFOLDER\OSDDrivers\WINPEx64\MASS –Type Directory
 New-Item $SCCMFOLDER\OSDDrivers\WINPEx64\NIC –Type Directory
 New-Item $SCCMFOLDER\OSDDrivers\W10x64 –Type Directory
 New-Item $SCCMFOLDER\OSDDrivers\W2019x64 –Type Directory
+
+#>
+
 
 ###################################################################################################
 ##### ADD DEFENDER WSUS Exclusions

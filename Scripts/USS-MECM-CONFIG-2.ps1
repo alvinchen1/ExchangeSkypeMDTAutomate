@@ -23,16 +23,16 @@
 # Stop-Transcript
 # Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-MECM-CONFIG-2.log
-Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-MECM-CONFIG-2.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-MECM-CONFIG-2.log
 
 ###################################################################################################
 ### Modify These Values
 ### ENTER MECM Server host names.
 # MDT will set host name in OS
-$MECMSRV = "USS-SRV-14"
+$MECMSRV = "USS-SRV-52"
 
 ### ENTER MDT STAGING FOLDER
-$MDTSTAGING = "\\DEV-MDT-01\STAGING"
+$MDTSTAGING = "\\DEP-MDT-01\STAGING"
 
 ### ENTER SCCM STAGING FOLDER
 # $-SCCMSTAGING = "\\SRV-MDT-01\STAGING\SCCM_STAGING"
@@ -41,7 +41,7 @@ $MDTSTAGING = "\\DEV-MDT-01\STAGING"
 ### Extend the AD Schema for MECM 
 # C:\SCCM_STAGING\MECM_CB_2103_ExtendSchema\X64\extadsch.exe
 Write-Host -foregroundcolor green "Extending AD Schema for MECM..."
-& $MDTSTAGING\MECM_CB_2103_ExtendSchema\X64\extadsch.exe
+& C:\MECM_STAGING\MECM_CB_2203\SMSSETUP\BIN\X64\extadsch.exe
 
 ###################################################################################################
 ### Create the SYSTEM MANAGEMENT Container for MECM
@@ -88,7 +88,7 @@ $acl = get-acl "ad:CN=System Management,CN=System,$root"
 $acl.access 
 
 # Get/Set the computer object which will be assigned with Full Control permission within the OU
-# $computer = get-adcomputer "USS-SRV-14"
+# $computer = get-adcomputer "USS-SRV-52"
 $computer = get-adcomputer $MECMSRV
 
 # Get the SID of the computer.

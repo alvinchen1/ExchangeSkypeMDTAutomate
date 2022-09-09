@@ -11,6 +11,14 @@
 # -Create S2D Volumes
 # -Enable the CSV cache
 
+
+###################################################################################################
+### Start-Transcript
+# Stop-Transcript
+# Overwrite existing log.
+Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\S2D-CONFIG-3.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\S2D-CONFIG-3.log
+
 ### ENTER the host name for the S2D Cluster nodes
 $NODE1 = "USS-PV-01"
 $NODE2 = "USS-PV-02"
@@ -19,7 +27,7 @@ $NODE2 = "USS-PV-02"
 $S2DCLUSTER = "USS-PV-CLUSTER1"
 
 ### ENTER Cluster IP Addresses
-$CLUSTER_IP = "10.10.5.35"
+$CLUSTER_IP = "10.1.102.81"
 
 ### ENTER Storage NIC Subnets
 ### These networks need to be Ignored/Excluded during cluster creation
@@ -185,6 +193,8 @@ $CSVCurrentCacheSize = (Get-Cluster $ClusterName).BlockCacheSize
 Write-Output "$ClusterName CSV cache size: $CSVCurrentCacheSize MB"
 
 
+###################################################################################################
+Stop-Transcript
 
 ###################################################################################################
 ############################# FINISH FINISH FINISH ################################################

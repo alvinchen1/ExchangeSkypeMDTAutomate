@@ -30,43 +30,47 @@
 # Stop-Transcript
 # Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-MECM-CONFIG-3.log
-Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-MECM-CONFIG-3.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-MECM-CONFIG-3.log
 
 ###################################################################################################
-### MODIFY These Values
-
+### MODIFY These Values
 ### ENTER WSUS CONTENT Drive.
 # 
-$WSUS_CONT_DRV = "D:\WSUS"
+$WSUS_CONT_DRV = "E:\WSUS"
 
 ### ENTER SQL INFO
-$SQLSVRNAME = "USS-SRV-14"
+$SQLSVRNAME = "USS-SRV-52"
 $SQLSVRACCT = "SVC-CM-SQL01"
 $DOMNAME = 'USS.LOCAL'
 
 ### ENTER MDT STAGING FOLDER
-$MDTSTAGING = "\\DEV-MDT-01\STAGING"
+$MDTSTAGING = "\\DEP-MDT-01\STAGING"
 
 ### ENTER SCCM STAGING FOLDER
-# $SCCMSTAGING = "\\DEV-MDT-01\STAGING\SCCM_STAGING"
+# $SCCMSTAGING = "\\DEP-MDT-01\STAGING\SCCM_STAGING"
 
 ### ENTER SQL CONFIGURATION FILE
 # Note this file needs to be in the MDT STAGING folder (D:\STAGING\SCCM_STAGING\SCRIPTS)
-$SQLCONFIGFILE = "USS_SQL2019ForSCCM2103.ini"
-
-### ENTER WADK Folder
-$WADKDIR = "E:\WADK"
+$SQLCONFIGFILE = "USS_SQL2019ForMECM2203.ini"
+### ENTER WADK Folder$WADKDIR = "E:\WADK"
 
 ### ENTER MECM SERVER NAME.
-# $MECMSRV = "USS-SRV-14"
+# $MECMSRV = "USS-SRV-52"
+
+
+
+###################################################################################################
+### COPY OSD_STAGING FOLDER TO LOCAL DRIVE 
+Write-Host -foregroundcolor green "Copying OSD_STAGING Folder to local drive - D:\"
+Copy-Item $MDTSTAGING\OSD_STAGING -Destination D:\ -Recurse -Force
 
 
 ###################################################################################################
 ### CREATE SQL FOLDERS 
-# The SC-SRV-14 server will be used as the SQL server
+# The SC-SRV-52 server will be used as the SQL server
 # This should be ran on the SQL server.
 #
-# Run this script on the SQL SERVER (SAT-SRV-14).
+# Run this script on the SQL SERVER (USS-SRV-52).
 #
 # Create Folders for SQL Install:
 # Grant the SQL service account (SVC-CM-SQL01) full control to the below folders.
@@ -184,8 +188,8 @@ Set-Acl G:\MSSQLBackup $ssa3
 
 ###################################################################################################
 ### Install SQL Server 2019 Enterprise Edition 
-#### The script below assumes all SQL files have been copied to the D:\SCCM_STAGING\SQL_2019_ENT\ folders.
-# Run this on the SCCM site server (XXX-SRV-14)
+#### The script below assumes all SQL files have been copied to the D:\MECM_STAGING\SQL_2019_ENT\ folders.
+# Run this on the SCCM site server (XXX-SRV-52)
 #
 # Set Windows Firewall ports for SQL
 # The default instance of SQL Server listens on Port 1433. Port 1434 is used by the SQL Browser Service which allows 
@@ -199,42 +203,36 @@ New-NetFirewallRule -DisplayName “SQL UDP Ports” -Direction Inbound –Proto
 
 ### Set SQL Service Accounts SPN
 # Run on the Site Server or domain controller
-# setspn -A MSSQLSvc/SAT-SRV-14.SATURN.LAB:1433 SVC-CM-SQL01
-# setspn -A MSSQLSvc/SAT-SRV-14:1433 SVC-CM-SQL01
+# setspn -A MSSQLSvc/USS-SRV-52.USS.LOCAL:1433 SVC-CM-SQL01
+# setspn -A MSSQLSvc/USS-SRV-52:1433 SVC-CM-SQL01
 Write-Host -foregroundcolor green "Set SQL Service Accounts SPN..."
 setspn -A MSSQLSvc/"$SQLSVRNAME.$DOMNAME":1433 $SQLSVRACCT
 setspn -A MSSQLSvc/"$SQLSVRNAME":1433 $SQLSVRACCT
 
 ###################################################################################################
 ### COPY SQL CONFIGURATION FILE TO LOCAL DRIVE 
-# Copy the SCCM_STAGING folder to the MDT STAGING folder:
-# Copy-Item '\\BBB-SC-01\d$\SCCM_STAGING' -Destination D:\STAGING -Recurse
-# Copy-Item '\\DEV-MDT-01\STAGING\SCCM_STAGING' -Destination C:\ -Recurse
-# Copy-Item $MECMSTAGINGFLDR -Destination C:\ -Recurse -Force
-# Copy-Item $MDTSTAGING\SCRIPTS\USS_SQL2019ForSCCM2103.ini -Destination C:\Windows\Temp -Recurse -Force
+#
 Write-Host -foregroundcolor green "COPY SQL CONFIGURATION FILE TO LOCAL DRIVE..."
-Copy-Item $MDTSTAGING\SCRIPTS\$SQLCONFIGFILE -Destination C:\Windows\Temp\SQL2019ForSCCM2103.ini -Recurse -Force
+Copy-Item $MDTSTAGING\SCRIPTS\SQL\$SQLCONFIGFILE -Destination C:\Windows\Temp\SQL2019ForMECM2203.ini -Recurse -Force
 
-### Install SQL 2019/2017 using SQL Configuration file
-# Take a Snapshot/Checkpoint of VM.
-# 
+### Install SQL 2019 using SQL Configuration file
+#
 # Use the "-NoNewWindow" switch if you get the following error message when attempting to run a script from a network share:
 # - "Open File – Security Warning” dialog box that says “We can’t verify who created this file. Are you sure you want to open this file?”
+# Start-Process "C:\MECM_STAGING\SQL_2019_ENT\Setup.exe" -Wait -ArgumentList '/QS /IACCEPTSQLSERVERLICENSETERMS /SQLSVCPASSWORD="!QAZ2wsx#EDC4rfv" /AGTSVCPASSWORD="!QAZ2wsx#EDC4rfv" /ConfigurationFile=C:\MECM_STAGING\SCRIPTS\USS_SQL2019ForSCCM2103.ini'
 #
 Write-Host -foregroundcolor green "Installing SQL 2019 using SQL Configuration file"
-
-# TODO: Pull this password value from an environment variable
-Start-Process "$MDTSTAGING\SQL_2019_ENT\Setup.exe" -Wait -NoNewWindow -ArgumentList '/QS /IACCEPTSQLSERVERLICENSETERMS /SQLSVCPASSWORD="... /AGTSVCPASSWORD="..." /ConfigurationFile=C:\Windows\Temp\SQL2019ForSCCM2103.ini'
+Start-Process "$MDTSTAGING\SQL_2019_ENT\Setup.exe" -Wait -NoNewWindow -ArgumentList '/QS /IACCEPTSQLSERVERLICENSETERMS /SQLSVCPASSWORD="!QAZ2wsx#EDC4rfv" /AGTSVCPASSWORD="!QAZ2wsx#EDC4rfv" /ConfigurationFile=C:\Windows\Temp\SQL2019ForMECM2203.ini'
 
 # Install Latest Cumulative Update Package for SQL Server 2019
-# C:\SCCM_STAGING\SQL_2019_CU20\SQLServer2017-KB4541283-x64.exe /ACTION=INSTALL /QUIETSIMPLE /ALLINSTANCES /ENU /IACCEPTSQLSERVERLICENSETERMS /INDICATEPROGRESS 
+# C:\MECM_STAGING\SQL_2019_CU20\SQLServer2017-KB4541283-x64.exe /ACTION=INSTALL /QUIETSIMPLE /ALLINSTANCES /ENU /IACCEPTSQLSERVERLICENSETERMS /INDICATEPROGRESS 
 # Install Latest Cumulative Update Package for SQL Server 2019
 ## JohnNote ****This line did not work ****After CUxx install confirm SQL Version is 15.0.xxxx.xxx
 # Use the "-NoNewWindow" switch if you get the following error message when attempting to run a script from a network share:
 # - "Open File – Security Warning” dialog box that says “We can’t verify who created this file. Are you sure you want to open this file?”
-# C:\SCCM_STAGING\SQL_2019_CU15\SQLServer2019-CU15-KB5008996-x64.exe /ACTION=PATCH /QUIETSIMPLE /ALLINSTANCES /ENU /IACCEPTSQLSERVERLICENSETERMS /INDICATEPROGRESS 
-# C:\SCCM_STAGING\SQL_2019_CU_16\SQLServer2019-KB5011644-x64.exe /ACTION=PATCH /QUIETSIMPLE /ALLINSTANCES /ENU /IACCEPTSQLSERVERLICENSETERMS /INDICATEPROGRESS 
-# Start-Process "C:\SCCM_STAGING\SQL_2019_CU_16\SQLServer2019-KB5011644-x64.exe" -Wait -ArgumentList '/ACTION=PATCH /QUIETSIMPLE /ALLINSTANCES /ENU /IACCEPTSQLSERVERLICENSETERMS /INDICATEPROGRESS'
+# C:\MECM_STAGING\SQL_2019_CU15\SQLServer2019-CU15-KB5008996-x64.exe /ACTION=PATCH /QUIETSIMPLE /ALLINSTANCES /ENU /IACCEPTSQLSERVERLICENSETERMS /INDICATEPROGRESS 
+# C:\MECM_STAGING\SQL_2019_CU_16\SQLServer2019-KB5011644-x64.exe /ACTION=PATCH /QUIETSIMPLE /ALLINSTANCES /ENU /IACCEPTSQLSERVERLICENSETERMS /INDICATEPROGRESS 
+# Start-Process "C:\MECM_STAGING\SQL_2019_CU_16\SQLServer2019-KB5011644-x64.exe" -Wait -ArgumentList '/ACTION=PATCH /QUIETSIMPLE /ALLINSTANCES /ENU /IACCEPTSQLSERVERLICENSETERMS /INDICATEPROGRESS'
 Write-Host -foregroundcolor green "Installing Latest Cumulative Update Package for SQL Server 2019 (CU_16)"
 Start-Process "$MDTSTAGING\SQL_2019_CU_16\SQLServer2019-KB5011644-x64.exe" -Wait -NoNewWindow -ArgumentList '/ACTION=PATCH /QUIETSIMPLE /ALLINSTANCES /ENU /IACCEPTSQLSERVERLICENSETERMS /INDICATEPROGRESS'
 
@@ -243,11 +241,11 @@ Start-Process "$MDTSTAGING\SQL_2019_CU_16\SQLServer2019-KB5011644-x64.exe" -Wait
 ### Install SQL SSMS 18.12 
 # Install Microsoft SQL Server Management Studio 18
 # Note I install SSMS without the /norestart and it did not prompt for a restart. Need to determine if a reboot is required.
-# Run this on the SCCM site server (SAT-SRV-14)
+# Run this on the SCCM site server (USS-SRV-52)
 #
-# C:\SCCM_STAGING\SSMS_18.8\SSMS-Setup-ENU.exe /install /passive 
-# C:\SCCM_STAGING\SSMS_18.12\SSMS-Setup-ENU.exe /install /passive
-# Start-Process -FilePath "C:\SCCM_STAGING\SSMS_18.12\SSMS-Setup-ENU.exe" -Wait -ArgumentList '/install /passive'
+# C:\MECM_STAGING\SSMS_18.8\SSMS-Setup-ENU.exe /install /passive 
+# C:\MECM_STAGING\SSMS_18.12\SSMS-Setup-ENU.exe /install /passive
+# Start-Process -FilePath "C:\MECM_STAGING\SSMS_18.12\SSMS-Setup-ENU.exe" -Wait -ArgumentList '/install /passive'
 Write-Host -foregroundcolor green "Installing SQL SSMS 18.12"
 Start-Process -FilePath $MDTSTAGING\SSMS_18.12\SSMS-Setup-ENU.exe -Wait -NoNewWindow -ArgumentList '/install /passive'
 
@@ -263,27 +261,29 @@ Start-Process -FilePath $MDTSTAGING\SSMS_18.12\SSMS-Setup-ENU.exe -Wait -NoNewWi
 # It will install the following features:
 # •	Deployment Tools
 # •	User State Migration Tool
-# Run this on the SCCM site server (SAT-SRV-14)
+# Run this on the SCCM site server (USS-SRV-52)
 #
 #
 # Install Windows ADK 2004
 # Sleep for 60 seconds to allow the adksetup.exe program to finish installing.
 # To install Windows Assessment and Deployment Kit (ADK) SILENTLY.
-# C:\SCCM_STAGING\WADK_10_2004_OFFLINE\adksetup.exe /quiet /installpath E:\WADK /features OptionId.UserStateMigrationTool OptionId.DeploymentTools
+# C:\MECM_STAGING\WADK_10_2004_OFFLINE\adksetup.exe /quiet /installpath E:\WADK /features OptionId.UserStateMigrationTool OptionId.DeploymentTools
 # Use the "-NoNewWindow" switch if you get the following error message when attempting to run a script from a network share:
 # - "Open File – Security Warning” dialog box that says “We can’t verify who created this file. Are you sure you want to open this file?”
 #
-# Start-Process "C:\SCCM_STAGING\WADK_10_2004_OFFLINE\adksetup.exe" -Wait -ArgumentList "/quiet /installpath $WADKDIR /features OptionId.UserStateMigrationTool OptionId.DeploymentTools"
+# Start-Process "C:\MECM_STAGING\WADK_10_2004_OFFLINE\adksetup.exe" -Wait -ArgumentList "/quiet /installpath $WADKDIR /features OptionId.UserStateMigrationTool OptionId.DeploymentTools"
 Write-Host -foregroundcolor green "Installing Windows ADK 2004"
-Start-Process "$MDTSTAGING\WADK_10_2004_OFFLINE\adksetup.exe" -Wait -NoNewWindow -ArgumentList "/quiet /installpath $WADKDIR /features OptionId.UserStateMigrationTool OptionId.DeploymentTools"
+# Start-Process "$MDTSTAGING\WADK_10_2004_OFFLINE\adksetup.exe" -Wait -NoNewWindow -ArgumentList "/quiet /installpath $WADKDIR /features OptionId.UserStateMigrationTool OptionId.DeploymentTools"
+Start-Process "C:\MECM_STAGING\WADK_10_2004_OFFLINE\adksetup.exe" -Wait -NoNewWindow -ArgumentList "/quiet /installpath $WADKDIR /features OptionId.UserStateMigrationTool OptionId.DeploymentTools"
 
 ### Install Windows ADK PE_2004 
 # Sleep for 60 seconds to allow the adkwinpesetup.exe program to finish installing.
 # Reboot the server after installation.
-# C:\SCCM_STAGING\WADK_10_WINPE_2004_OFFLINE\adkwinpesetup.exe /quiet /ceip off /installpath E:\WADK /Features OptionId.WindowsPreinstallationEnvironment /norestart
-# Start-Process "C:\SCCM_STAGING\WADK_10_WINPE_2004_OFFLINE\adkwinpesetup.exe"-Wait -NoNewWindow -ArgumentList "/quiet /ceip off /installpath $WADKDIR /Features OptionId.WindowsPreinstallationEnvironment /norestart"
+# C:\MECM_STAGING\WADK_10_WINPE_2004_OFFLINE\adkwinpesetup.exe /quiet /ceip off /installpath E:\WADK /Features OptionId.WindowsPreinstallationEnvironment /norestart
+# Start-Process "C:\MECM_STAGING\WADK_10_WINPE_2004_OFFLINE\adkwinpesetup.exe"-Wait -NoNewWindow -ArgumentList "/quiet /ceip off /installpath $WADKDIR /Features OptionId.WindowsPreinstallationEnvironment /norestart"
 Write-Host -foregroundcolor green "Installing Windows ADK PE_2004"
-Start-Process "$MDTSTAGING\WADK_10_WINPE_2004_OFFLINE\adkwinpesetup.exe"-Wait -NoNewWindow -ArgumentList "/quiet /ceip off /installpath $WADKDIR /Features OptionId.WindowsPreinstallationEnvironment /norestart"
+# Start-Process "$MDTSTAGING\WADK_10_WINPE_2004_OFFLINE\adkwinpesetup.exe"-Wait -NoNewWindow -ArgumentList "/quiet /ceip off /installpath $WADKDIR /Features OptionId.WindowsPreinstallationEnvironment /norestart"
+Start-Process "C:\MECM_STAGING\WADK_10_WINPE_2004_OFFLINE\adkwinpesetup.exe"-Wait -NoNewWindow -ArgumentList "/quiet /ceip off /installpath $WADKDIR /Features OptionId.WindowsPreinstallationEnvironment /norestart"
 
 ###################################################################################################
 ### ADD DEFENDER WSUS Exclusions
@@ -318,7 +318,7 @@ Write-Host -foregroundcolor green "ADDING DEFENDER WSUS Exclusions"
 Add-MpPreference -ExclusionPath "C:\WSUSMaint"
 Add-MpPreference -ExclusionPath "C:\WSUSScripts"
 Add-MpPreference -ExclusionPath "C:\WSUS_STAGING"
-Add-MpPreference -ExclusionPath "C:\SCCM_STAGING"
+Add-MpPreference -ExclusionPath "C:\MECM_STAGING"
 Add-MpPreference -ExclusionPath "$WSUS_CONT_DRV"
 Add-MpPreference -ExclusionPath "D:\WSUSImports"
 Add-MpPreference -ExclusionPath "D:\WSUSExports"

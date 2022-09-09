@@ -21,13 +21,13 @@
 # Stop-Transcript
 # Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-OS-PREP-1.log
-Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-OS-PREP-1.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-OS-PREP-1.log
 
 ###################################################################################################
 # MODIFY/ENTER These Values Before Running This Script.
 #
 ### ENTER MDT STAGING FOLDER
-$MDTSTAGING = "\\DEV-MDT-01\STAGING"
+$MDTSTAGING = "\\DEP-MDT-01\STAGING"
 
 
 ###################################################################################################

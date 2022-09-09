@@ -16,8 +16,12 @@
 # -Enable Firewall Rule - Enable Windows Remote Management for S2D cluster creation
 # -Change DVD Drive Letter from D: to X:. 
 
-
-
+###################################################################################################
+### Start-Transcript
+# Stop-Transcript
+# Overwrite existing log.
+Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\S2D-CONFIG-1.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\S2D-CONFIG-1.log
 
 ### ENTER the host name for the S2D Cluster nodes
 # MDT will set host name in OS
@@ -28,14 +32,14 @@ $NODE2 = "USS-PV-02"
 $NODE3 = "USS-PV-03"
 
 ### ENTER MGMT "TEAM" NIC IP Addresses
-$NODE1_MGMT_IP = "10.10.5.31"
-$NODE2_MGMT_IP = "10.10.5.32"
+$NODE1_MGMT_IP = "10.1.102.82"
+$NODE2_MGMT_IP = "10.1.102.84"
 $NODE3_MGMT_IP = "40.40.40.40"
 
-$DNS1 = "10.10.5.11"
-$DNS2 = "10.10.5.12"
-$DEFAULTGW = "10.10.5.1"
-$PREFIXLEN = "25" # Set subnet mask /24, /25
+$DNS1 = "10.1.102.50"
+$DNS2 = "10.1.102.51"
+$DEFAULTGW = "10.1.102.1"
+$PREFIXLEN = "24" # Set subnet mask /24, /25
 
 ### ENTER Storage NIC IP Addreses
 $NODE1_STOR_IP_1 = "10.10.10.11"
@@ -49,7 +53,6 @@ $PREFIXLEN_S = "24" # Set subnet mask /24, /25
 
 $DEFAULTGW_S_1 = "10.10.10.1"
 $DEFAULTGW_S_2 = "20.20.20.1"
-
 
 
 ###################################################################################################
@@ -78,6 +81,19 @@ Rename-NetAdapter –Name “NIC4” –NewName “NIC_VM2_10GB”
 Rename-NetAdapter –Name “SLOT 2 Port 1” –NewName “NIC_STOR1_25GB”
 Rename-NetAdapter –Name “SLOT 2 Port 2” –NewName “NIC_STOR2_25GB”
 
+
+# Prevent NICs from Registering with DNS 
+Get-NetAdapter NIC_MGMT1_10GB | Set-DnsClient -RegisterThisConnectionsAddress $false
+Get-NetAdapter NIC_MGMT2_10GB | Set-DnsClient -RegisterThisConnectionsAddress $false
+
+Get-NetAdapter NIC_VM1_10GB | Set-DnsClient -RegisterThisConnectionsAddress $false
+Get-NetAdapter NIC_VM2_10GB | Set-DnsClient -RegisterThisConnectionsAddress $false
+
+Get-NetAdapter NIC_STOR1_25GB | Set-DnsClient -RegisterThisConnectionsAddress $false
+Get-NetAdapter NIC_STOR2_25GB | Set-DnsClient -RegisterThisConnectionsAddress $false
+
+
+
 ###################################################################################################
 ### TEAM MGMT NICs 
 ### (OPTION#_1_PHYSICAL SERVER NICs) Set the NIC Teams (Load-Balancing Failover - LBFO)
@@ -89,6 +105,7 @@ Start-Sleep -Seconds 20
 # Remove IP Address from TEAMs.
 Get-netadapter TEAM_MGMT | get-netipaddress –addressfamily ipv4 | remove-netipaddress -Confirm:$false
 
+Start-Sleep -Seconds 10
 
 ### Configure MGMT and STORAGE NICs ###############################################################
 If($NODENAME -eq $NODE1){
@@ -130,31 +147,13 @@ Get-netadapter TEAM_MGMT | New-NetIPAddress -IPAddress $NODE3_MGMT_IP -AddressFa
 ### Set the MGMT TEAMs DNS Addresses
 # DO NOT set a DNS address for the "TEAM_VM" and "TEAM_STOR NIC/TEAMS. 
 # We don't want the TEAM_VM and TEAM_STOR TEAMS to register in DNS.
-# Get-NetAdapter TEAM_MGMT | Set-DnsClientServerAddress -ServerAddresses '10.10.5.11','10.10.5.12'
+# Get-NetAdapter TEAM_MGMT | Set-DnsClientServerAddress -ServerAddresses '10.1.102.50','10.1.102.51'
 Get-NetAdapter TEAM_MGMT | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2
-
-
-###################################################################################################
-### Enable Remote Desktop
-# These command witll enable Remote Desktop and set the RDP firewall ports on the local server.
-Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
-Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-###################################################################################################
-### Stop/Prevent Server Manager from loading at startup
-# $SRVNAME = HOSTNAME
-# Invoke-Command -ComputerName $SRVNAME -ScriptBlock { New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value "0x1" –Force}
-# These commmands prevent Server Manager from loading at startup and disables the Server Manager Schedule task
-Invoke-Command -ScriptBlock { New-ItemProperty -Path HKCU:\Software\Microsoft\ServerManager -Name DoNotOpenServerManagerAtLogon -PropertyType DWORD -Value "0x1" –Force}
-Get-ScheduledTask -TaskName ServerManager | Disable-ScheduledTask -Verbose
 
 ###################################################################################################
 ### Install Hyper-V
 Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
 
-#################################### Add Windows Server Backup Feature ############################
-### Add the windows server backup feature for DPM
-Install-WindowsFeature -Name Windows-Server-Backup
 
 ###################################################################################################
 # Install Failover Cluster Manager roles.
@@ -164,7 +163,7 @@ Install-windowsfeature RSAT-Clustering –IncludeAllSubFeature
 
 ###################################################################################################
 ### Enable ALL File and Printer Sharing rule
-Netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=Yes
+# Netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=Yes
 
 ### Enable WMI for S2D cluster creation
 Netsh advfirewall firewall set rule group="Windows Management Instrumentation (wmi)" new enable=Yes
@@ -172,14 +171,11 @@ Netsh advfirewall firewall set rule group="Windows Management Instrumentation (w
 ### Enable Windows Remote Management for S2D cluster creation
 Netsh advfirewall firewall set rule group="Windows Remote Management" new enable=Yes
 
-### Change DVD Drive Letter from D: to X:. 
-$DvdDrive = Get-CimInstance -Class Win32_Volume -Filter "driveletter='D:'"
-Set-CimInstance -InputObject $DvdDrive -Arguments @{DriveLetter="X:"}
-
 
 ################################### REBOOT SERVER #################################################
 
-
+###################################################################################################
+Stop-Transcript
 
 
 

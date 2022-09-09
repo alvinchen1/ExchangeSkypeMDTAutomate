@@ -492,11 +492,29 @@ Function Check-Prereqs
     Import-Module -Name ADCSTemplate
 }
 
+Function Test-ADObject ($DN)
+{
+    Write-Host "Checking existence of $DN"
+    Try 
+    {
+        Get-ADObject "$DN"
+        Write-Host "True"
+    }
+    Catch 
+    {
+        $null
+        Write-Host "False"
+    }
+}
+
 # =============================================================================
 # MAIN ROUTINE
 # =============================================================================
 
 Check-Prereqs
+
+$DomainDN = (Get-ADRootDSE).defaultNamingContext
+[string]$DC = (Get-ADDomainController -Discover -ForceDiscover -Writable).HostName[0]
 
 # Create Web Servers security group
 If (!([bool] (Get-ADGroup -Filter {sAMAccountName -eq 'Web Servers'}))) 
@@ -505,23 +523,46 @@ If (!([bool] (Get-ADGroup -Filter {sAMAccountName -eq 'Web Servers'})))
 }
 
 # Create certificate templates
-New-ADCSTemplate -DisplayName "$DomainName User" -JSON $JSON_User -Publish -Identity "$DomainName\Domain Users"
-New-ADCSTemplate -DisplayName "$DomainName Workstation" -JSON $JSON_Workstation -Publish -Identity "$DomainName\Domain Computers"
-$DCAcl = @("$DomainName\Domain Controllers","$DomainName\Enterprise Read-only Domain Controllers")
-New-ADCSTemplate -DisplayName "$DomainName Domain Controller" -JSON $JSON_DC -Publish -Identity $DCAcl
-New-ADCSTemplate -DisplayName "$DomainName IPsec" -JSON $JSON_IPsec -Publish
-New-ADCSTemplate -DisplayName "$DomainName Web Server" -JSON $JSON_WebServer -Publish -Identity "$DomainName\Web Servers"
-New-ADCSTemplate -DisplayName "$DomainName OCSP Response Signing" -JSON $JSON_OCSP -Publish
-New-ADCSTemplate -DisplayName "RDS" -JSON $JSON_RDS -Publish -Identity "$DomainName\Domain Computers"
+If (!(Test-ADObject ('CN='+$DomainName+'User,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,'+$DomainDN))) 
+{
+    New-ADCSTemplate -DisplayName "$DomainName User" -JSON $JSON_User -Publish -Identity "$DomainName\Domain Users" -Server $DC
+}
+
+If (!(Test-ADObject ('CN='+$DomainName+'Workstation,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,'+$DomainDN))) 
+{
+    New-ADCSTemplate -DisplayName "$DomainName Workstation" -JSON $JSON_Workstation -Publish -Identity "$DomainName\Domain Computers" -Server $DC
+}
+
+If (!(Test-ADObject ('CN='+$DomainName+'DomainController,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,'+$DomainDN))) 
+{
+    $DCAcl = @("$DomainName\Domain Controllers","$DomainName\Enterprise Read-only Domain Controllers")
+    New-ADCSTemplate -DisplayName "$DomainName Domain Controller" -JSON $JSON_DC -Publish -Identity $DCAcl -Server $DC
+}
+
+If (!(Test-ADObject ('CN='+$DomainName+'IPsec,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,'+$DomainDN))) 
+{
+    New-ADCSTemplate -DisplayName "$DomainName IPsec" -JSON $JSON_IPsec -Publish -Server $DC
+}
+
+If (!(Test-ADObject ('CN='+$DomainName+'WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,'+$DomainDN))) 
+{
+    New-ADCSTemplate -DisplayName "$DomainName Web Server" -JSON $JSON_WebServer -Publish -Identity "$DomainName\Web Servers" -Server $DC
+}
+
+If (!(Test-ADObject ('CN='+$DomainName+'OCSPResponseSigning,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,'+$DomainDN))) 
+{
+    New-ADCSTemplate -DisplayName "$DomainName OCSP Response Signing" -JSON $JSON_OCSP -Publish -Server $DC
+}
+
+If (!(Test-ADObject ('CN=RDS,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,'+$DomainDN))) 
+{
+    New-ADCSTemplate -DisplayName "RDS" -JSON $JSON_RDS -Publish -Identity "$DomainName\Domain Computers" -Server $DC
+}
 
 # Check work
-Write-Host "`nThe following templates were created:`n"
-(Get-ADCSTemplate).DisplayName | Where-Object {$_ -eq "$DomainName User"}
-(Get-ADCSTemplate).DisplayName | Where-Object {$_ -eq "$DomainName Workstation"}
-(Get-ADCSTemplate).DisplayName | Where-Object {$_ -eq "$DomainName Domain Controller"}
-(Get-ADCSTemplate).DisplayName | Where-Object {$_ -eq "$DomainName IPsec"}
-(Get-ADCSTemplate).DisplayName | Where-Object {$_ -eq "$DomainName Web Server"}
-(Get-ADCSTemplate).DisplayName | Where-Object {$_ -eq "$DomainName OCSP Response Signing"}
-(Get-ADCSTemplate).DisplayName | Where-Object {$_ -eq "RDS"}
+Write-Host "`nThe following templates were created:`n" -ForegroundColor Yellow
+$TemplateObjects = Get-ADCSTemplate -DisplayName "$DomainName*" -Server $DC | Select-Object Name, DisplayName, Created, Modified
+$TemplateObjects += Get-ADCSTemplate -DisplayName "RDS" -Server $DC | Select-Object Name, DisplayName, Created, Modified
+$TemplateObjects | Sort-Object DisplayName | ft -AutoSize
 
 Stop-Transcript

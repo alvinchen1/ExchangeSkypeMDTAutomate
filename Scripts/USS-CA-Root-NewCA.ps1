@@ -22,7 +22,9 @@ OUTPUTS
 # Declare Variables
 # -----------------------------------------------------------------------------
 $ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
+$ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
 $DTG = Get-Date -Format yyyyMMddTHHmm
+$RootDir = Split-Path $ScriptDir –Parent
 $ConfigFileName = $MyInvocation.MyCommand.Path.Replace("ps1","config")
 
 Start-Transcript -Path "$RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log"
@@ -33,6 +35,7 @@ If (!(Test-Path -Path $ConfigFileName)) {Throw "ERROR: Unable to locate $ConfigF
 [XML]$ConfigFile = Get-Content $ConfigFileName
 $AiaDir = $ConfigFile.Settings.Directories.AIA
 $CaBackupCMDFileName = $ConfigFile.Settings.Directories.Script + "\BackupCA.cmd"
+$CACommonName = $ConfigFile.Settings.CAParameter.CACommonName
 
 # =============================================================================
 # FUNCTIONS
@@ -88,7 +91,7 @@ Function Install-RootCA
     certutil –setreg CA\AuditFilter 127
     Restart-Service certsvc
 
-    Copy-Item $env:windir\System32\certSrv\CertEnroll\*.crt $ConfigFile.Settings.Directories.AIA
+    Copy-Item $env:windir\System32\CertSrv\CertEnroll\*.crt $ConfigFile.Settings.Directories.AIA
 
     foreach ($Crtfile in Get-ChildItem $AiaDir -Filter "$env:computerName*.crt")
     {
@@ -96,6 +99,7 @@ Function Install-RootCA
         Move-Item $AiaDir\$Crtfile "$AiaDir\$NewCrtFilename"
     }
 
+    If (Test-Path "$env:windir\System32\CertSrv\CertEnroll\$CACommonName.crl") {Copy-Item "$env:windir\System32\CertSrv\CertEnroll\$CACommonName.crl" $ConfigFile.Settings.Directories.CRL}
     certutil -CRL
 }
 

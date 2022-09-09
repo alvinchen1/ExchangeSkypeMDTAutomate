@@ -17,7 +17,7 @@
 # Stop-Transcript
 # Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-AD-CONFIG-2.log
-Start-Transcript -Path \\SRV-MDT-01\DEPLOYMENTSHARE$\LOGS\USS-AD-CONFIG-2.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-AD-CONFIG-2.log
 
 ###################################################################################################
 # MODIFY/ENTER These Values
@@ -25,10 +25,8 @@ Start-Transcript -Path \\SRV-MDT-01\DEPLOYMENTSHARE$\LOGS\USS-AD-CONFIG-2.log
 # ENTER New Forest name and DSRM Password.
 $domainname = “USS.LOCAL”
 $netbiosName = “USS”
-
-# Note the DSRM password is ... Update it before running this script.
-# TODO: Pull this password value from an environment variable
-#$DSRMPASS = (ConvertTo-SecureString -String ... -AsPlainText -Force)
+# Note the DSRM password ... Update it before running this script.
+$DSRMPASS = (ConvertTo-SecureString -String !QAZ2wsx#EDC4rfv -AsPlainText -Force)
 
 
 ###################################################################################################

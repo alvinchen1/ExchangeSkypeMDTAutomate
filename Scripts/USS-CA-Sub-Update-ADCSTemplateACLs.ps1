@@ -76,33 +76,29 @@ Function Check-Prereqs
 
 Check-Prereqs
 
+$DomainDN = (Get-ADRootDSE).defaultNamingContext
+[string]$DC = (Get-ADDomainController -Discover -ForceDiscover -Writable).HostName[0]
+
 # Build array of certificate templates to modify and publish
-$TemplateObjects = Get-ADCSTemplate | where {$_.DisplayName -like "$DomainName*"}
-$TemplateObjects += Get-ADCSTemplate | where {$_.DisplayName -eq "RDS"}
+$TemplateObjects = Get-ADCSTemplate -DisplayName "$DomainName*" -Server $DC
+$TemplateObjects += Get-ADCSTemplate -DisplayName "RDS" -Server $DC
 
 ForEach ($TemplateObject in $TemplateObjects) {
     $templateName = $TemplateObject.Name
     $TemplateDN = $TemplateObject.DistinguishedName
     $template = Get-ADObject ($TemplateDN) -ErrorAction SilentlyContinue
     $acl = Get-Acl "AD:$template"
-    Write-Verbose -Message "Updating ACLs for Template: $templateName"
+    Write-Host "`nUpdating ACLs for Template: $templateName" -ForegroundColor Yellow
 
     # Remove existing explicit ACEs
     $acesToRemove = $acl.Access | where {$_.IsInherited -eq $false}
-
-    foreach ($aceToRemove in $acesToRemove) {
-        Write-Verbose -Message "...Remove: $aceToRemove.IdentityReference"
-        $acl.RemoveACcessRule($aceToRemove)
-    }
+    foreach ($aceToRemove in $acesToRemove) {$acl.RemoveACcessRule($aceToRemove)}
     
     # Break inheritance and remove other ACEs inherited from CN=Certificate Templates
     $acl.SetAccessRuleProtection($true, $false)
-    Write-Verbose -Message "...Disable Inherited Permissions"
 
-    #Add Read for all authenticated users
+    # Add Read for all authenticated users
     $AuthenticatedUsers = [System.Security.Principal.SecurityIdentifier]'S-1-5-11'
-    Write-Verbose -Message "...Add Authenticated Users"
-
     $ace0 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $AuthenticatedUsers,"ReadProperty, GenericExecute","Allow",$nullGUID,"None",$nullGUID
 
     # Add Enterprise Admins with Write/Read only
@@ -112,7 +108,7 @@ ForEach ($TemplateObject in $TemplateObjects) {
    
     If ($templateName -like "*DomainController*")
     {
-        #DCs
+        # DCs
         $group = (Get-ADGroup "Domain Controllers")
         $groupSid = new-object System.Security.Principal.SecurityIdentifier $group.SID
 
@@ -123,7 +119,7 @@ ForEach ($TemplateObject in $TemplateObjects) {
         # Read  Permissions (DCs)
         $ace4 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericExecute","Allow",$nullGUID,"None",$nullGUID
 
-        #RODCs
+        # RODCs
         $group = (Get-ADGroup "Enterprise Read-only Domain Controllers")
         $groupSid = new-object System.Security.Principal.SecurityIdentifier $group.SID
 
@@ -155,10 +151,8 @@ ForEach ($TemplateObject in $TemplateObjects) {
        
         # AutoEnroll Permissions
         $ace2 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericRead, GenericExecute, ExtendedRight","Allow",$AutoEnrollGUID,"None",$nullGUID 
-
         # Enroll  Permissions
         $ace3 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericRead, GenericExecute, ExtendedRight","Allow",$EnrollGUID,"None",$nullGUID 
-
         # Read Permissions
         $ace4 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericExecute","Allow",$nullGUID,"None",$nullGUID
     }
@@ -171,7 +165,6 @@ ForEach ($TemplateObject in $TemplateObjects) {
         
         # Enroll  Permissions
         $ace2 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericRead, GenericExecute, ExtendedRight","Allow",$EnrollGUID,"None",$nullGUID 
-
         # Read Permissions
         $ace3 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericExecute","Allow",$nullGUID,"None",$nullGUID
     }
@@ -188,7 +181,7 @@ ForEach ($TemplateObject in $TemplateObjects) {
         # Read Permissions
         $ace4 = new-object System.DirectoryServices.ActiveDirectoryAccessRule $groupSid,"ReadProperty, GenericExecute","Allow",$nullGUID,"None",$nullGUID
 
-        #DCs
+        # DCs
         $group = (Get-ADGroup "Domain Controllers")
         $groupSid = new-object System.Security.Principal.SecurityIdentifier $group.SID
 
@@ -212,7 +205,7 @@ ForEach ($TemplateObject in $TemplateObjects) {
     # Update the ACL on the Template
     Set-Acl -Path "AD:$template" -AclObject $acl
 
-    Write-Verbose -Message "Finished updating Template: $templateName"
+    Write-Host "Finished updating Template: $templateName"
     
     $ace0 = $null
     $ace1 = $null

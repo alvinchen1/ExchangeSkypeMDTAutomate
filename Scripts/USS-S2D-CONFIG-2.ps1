@@ -11,6 +11,13 @@
 # -Disable Network Adapter Bindings on "TEAM_VM" NICs/TEAMs
 # -ADD DEFENDER HYPER-V Exclusions
 
+###################################################################################################
+### Start-Transcript
+# Stop-Transcript
+# Overwrite existing log.
+Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\S2D-CONFIG-2.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\S2D-CONFIG-2.log
+
 ### ENTER the host name for the S2D Cluster nodes
 # MDT will set host name in OS
 $NODENAME = HOSTNAME
@@ -20,12 +27,12 @@ $NODE2 = "USS-PV-02"
 $NODE3 = "USS-PV-03"
 
 ### Set Virtual Switch "TEAM" NIC IP Addresses
-$NODE1_VSWITCH_IP = "10.10.5.33"
-$NODE2_VSWITCH_IP = "10.10.5.34"
+$NODE1_VSWITCH_IP = "10.1.102.83"
+$NODE2_VSWITCH_IP = "10.1.102.85"
 $NODE3_VSWITCH_IP = "40.40.40.50"
-$DEFAULTGW = "10.10.5.1"
+$DEFAULTGW = "10.1.102.1"
 
-$PREFIXLEN = "25" # Set subnet mask /24, /25
+$PREFIXLEN = "24" # Set subnet mask /24, /25
 
 
 ###################################################################################################
@@ -48,7 +55,7 @@ If($NODENAME -eq $NODE1){
 ### Set the virtual switch TEAM NICs IP Addresses (NIC-CONFIG-DELL-AX740-NODES)
 # S2D Host (USS-PV-01)
 # write-host("Host Name is USS-PV-01")
-# Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress '10.10.5.34' -AddressFamily IPv4 -PrefixLength 25 –defaultgateway '10.10.5.1' -Confirm:$false
+# Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress '10.1.102.85' -AddressFamily IPv4 -PrefixLength 25 –defaultgateway '10.1.102.1' -Confirm:$false
 Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress $NODE1_VSWITCH_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
 }
 
@@ -57,7 +64,7 @@ If($NODENAME -eq $NODE2){
 ### Set the virtual switch TEAM NICs IP Addresses (NIC-CONFIG-DELL-AX740-NODES)
 # S2D Host (USS-PV-02)
 # write-host("Host Name is USS-PV-02")
-# Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress '10.10.5.34' -AddressFamily IPv4 -PrefixLength 25 –defaultgateway '10.10.5.1' -Confirm:$false
+# Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress '10.1.102.85' -AddressFamily IPv4 -PrefixLength 25 –defaultgateway '10.1.102.1' -Confirm:$false
 Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress $NODE2_VSWITCH_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
 }
 
@@ -66,7 +73,7 @@ If($NODENAME -eq $NODE3){
 ### Set the virtual switch TEAM NICs IP Addresses (NIC-CONFIG-DELL-AX740-NODES)
 # S2D Host (USS-PV-03)
 # write-host("Host Name is USS-PV-03")
-# Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress '10.10.5.34' -AddressFamily IPv4 -PrefixLength 25 –defaultgateway '10.10.5.1' -Confirm:$false
+# Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress '10.1.102.85' -AddressFamily IPv4 -PrefixLength 25 –defaultgateway '10.1.102.1' -Confirm:$false
 Get-netadapter "vEthernet (vSwitch-External)" | New-NetIPAddress -IPAddress $NODE3_VSWITCH_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
 }
 
@@ -148,3 +155,9 @@ Add-MpPreference -ExclusionProcess "$Env:systemroot\System32\Vmwp.exe" -Force
 
 # Add Defender file exclusion
 # Add-MpPreference -ExclusionPath "C:\test\file.exe" -Force
+
+
+###################################################################################################
+Stop-Transcript
+
+

@@ -8,7 +8,7 @@
 #
 # *** Before runnng this script ensure that the following drive exist on the server ***
 #
-# (C:)(120gb+) OS - Page file (4k, NTFS)
+# (C:)(510gb+) OS - Page file (4k, NTFS)
 # (D:)(7TB+) MECM - VMs (64k, ReFS)
 # (E:)(100-250TB+) - DPM STORAGE (64k, ReFS)
 #
@@ -25,18 +25,18 @@
 # Stop-Transcript
 # Overwrite existing log.
 Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-ADM-CONFIG-1.log
-Start-Transcript -Path \\DEV-MDT-01\DEPLOYMENTSHARE$\LOGS\$env:COMPUTERNAME\USS-ADM-CONFIG-1.log
+Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-ADM-CONFIG-1.log
 
 ###################################################################################################
 # MODIFY/ENTER These Values
 
 ### Set the following variable before running this script.
-$MGMT_NIC_IP = "10.10.5.55"
-# $MGMT_NIC_IP = "10.10.5.30"
-$DNS1 = "10.10.5.11"
-$DNS2 = "10.10.5.12"
-$DEFAULTGW = "10.10.5.1"
-$PREFIXLEN = "25" # Set subnet mask /24, /25
+$MGMT_NIC_IP = "10.1.102.80"
+# $MGMT_NIC_IP = "10.1.102.30"
+$DNS1 = "10.1.102.50"
+$DNS2 = "10.1.102.51"
+$DEFAULTGW = "10.1.102.1"
+$PREFIXLEN = "24" # Set subnet mask /24, /25
 
 ###################################################################################################
 ### Rename the NICs
@@ -66,7 +66,7 @@ Rename-NetAdapter –Name “CPU SLOT 6 Port 2” –NewName “NIC_VM4_10GB”
 ###################################################################################################
 ### TEAM MGMT and VM NICs 
 ### (OPTION#_1_PHYSICAL SERVER NICs) Set the NIC Teams (Load-Balancing Failover - LBFO)
-New-NetLbfoTeam -Name "TEAM_MGMT" -TeamMembers "NIC_MGMT1_10GB","NIC_MGMT2_10GB" -TeamingMode SwitchIndependent -LoadBalancingAlgorithm HyperVPort -Confirm:$false
+New-NetLbfoTeam -Name "TEAM_MGMT" -TeamMembers "NIC_MGMT1_1GB","NIC_MGMT2_1GB" -TeamingMode SwitchIndependent -LoadBalancingAlgorithm HyperVPort -Confirm:$false
 New-NetLbfoTeam -Name "TEAM_VM" -TeamMembers "NIC_VM1_10GB","NIC_VM2_10GB","NIC_VM3_10GB","NIC_VM4_10GB" -TeamingMode SwitchIndependent -LoadBalancingAlgorithm HyperVPort -Confirm:$false
 
 Start-Sleep -Seconds 40
@@ -84,7 +84,7 @@ Get-netadapter TEAM_MGMT | New-NetIPAddress -IPAddress $MGMT_NIC_IP -AddressFami
 ### Set the MGMT TEAMs DNS Addresses
 # DO NOT set a DNS address for the "TEAM_VM" and "TEAM_STOR NIC/TEAMS. 
 # We don't want the TEAM_VM and TEAM_STOR TEAMS to register in DNS.
-# Get-NetAdapter TEAM_MGMT | Set-DnsClientServerAddress -ServerAddresses '10.10.5.11','10.10.5.12'
+# Get-NetAdapter TEAM_MGMT | Set-DnsClientServerAddress -ServerAddresses '10.1.102.50','10.1.102.51'
 Get-NetAdapter TEAM_MGMT | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2
 
 ##################################################################################################
@@ -120,10 +120,20 @@ Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
 Install-WindowsFeature -Name Failover-Clustering –IncludeManagementTools
 Install-windowsfeature RSAT-Clustering –IncludeAllSubFeature
 
+# <#
+# START COMMENT
+# END COMMENT
+#>
+
+
+
 ###################################################################################################
 ### Configure SSD and HDD Disk For Admin Server #######################################
 Write-Host -foregroundcolor green "Configuring Disk for Admin Server..."
 ###################################################################################################
+
+# Pause
+
 
 ### Create Storage Pool
 # The following example shows which physical disks are available in the primordial pool.
@@ -136,16 +146,22 @@ Write-Host -foregroundcolor green "Configuring Disk for Admin Server..."
 # New-StoragePool –FriendlyName StoragePool1 –StorageSubsystemFriendlyName "Windows Storage*" –PhysicalDisks (Get-PhysicalDisk –CanPool $True)
 
 ### Remove any existing Virtual Disk
-Get-VirtualDisk | Remove-VirtualDisk -Confirm:$false
+# Get-VirtualDisk | Remove-VirtualDisk -Confirm:$false
 
 ### Remove any existing Storage Pools
-Get-StoragePool | Remove-StoragePool -Confirm:$false
+# Get-StoragePool | Remove-StoragePool -Confirm:$false
+# Get-StoragePool | Where-Object -Property isPrimordial -EQ $false | Remove-StoragePool -Confirm:$false
 
+# Get-PhysicalDisk
 # Get-VirtualDisk
 # Get-StoragePool
 # Get-Volume
 
 ### Clean Existing Drives for Storage Pools
+# This step will:
+# --Remove any existing Virtual Disk
+# --Remove any existing Storage Pools
+# --Clean the disk
 # https://docs.microsoft.com/en-us/windows-server/storage/storage-spaces/deploy-storage-spaces-direct
 # Before you enable Storage Spaces Direct, ensure your drives are empty: no old partitions or other data.
 # Note use this when the drives that will be used for S2D have been used before.
@@ -190,6 +206,9 @@ New-Volume -StoragePoolFriendlyName HDD_POOL -FriendlyName "DPMSTOR-REFS" -FileS
 # Remove-VirtualDisk -FriendlyName DPMSTOR -Confirm:$false
 
 ###################################################################################################
+
+
+
 Stop-Transcript
 
 
