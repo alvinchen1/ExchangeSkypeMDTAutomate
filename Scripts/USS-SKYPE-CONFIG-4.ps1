@@ -1,9 +1,9 @@
-<#
+﻿<#
 NAME
-    USS-SKYPE-CONFIG-2.ps1
+    SKYPE-CONFIG-4.ps1
 
 SYNOPSIS
-    Installs Skype For Business in the AD domain
+    Configures Skype For Business
 
 SYNTAX
     .\$ScriptName
@@ -22,357 +22,497 @@ Start-Transcript -Path "$env:WINDIR\Temp\$env:COMPUTERNAME-$DTG-$ScriptName.log"
 
 # Load variables from config.xml
 If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile Exiting..."}
+$XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
+$DomainName = ($WS | ? {($_.Name -eq "DomainName")}).Value
 $DomainDnsName = ($WS | ? {($_.Name -eq "DomainDnsName")}).Value
-$Windows2019SourcePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\W2019\sources\sxs"
-$DOTNETFRAMEWORKPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\DOTNETFRAMEWORK_4.8"
-$Skype4BusinessPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\SkypeForBusiness\OCS_Eval"
+$InstallShare = ($WS | ? {($_.Name -eq "InstallShare")}).Value
+$Skype4BusinessPath = "$InstallShare\SkypeForBusiness\OCS_Eval"
 $SkypeForBusiness = ($XML.Component | ? {($_.Name -eq "SkypeForBusiness")}).Settings.Configuration
-$SkypeForBusinessCUPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Skype4BusinessCU"
-$SQLServer2019Path = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\SQLServer2019"
 $CSShareName = ($SkypeForBusiness | ? {($_.Name -eq "CSShareName")}).Value
 $CSShareNamePath = ($SkypeForBusiness | ? {($_.Name -eq "CSShareNamePath")}).Value
-$LDAPDomain = ($WS | ? {($_.Name -eq "DomainDistinguishedName")}).Value
-$CertTemplate = ($WS | ? {($_.Name -eq "DomainName")}).Value + "WebServer"
+$CertTemplate = "$DomainName Web Server"
 
-###################################################################################################
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-###
-###    Alvin Chen
-###    Install Skype For Business 2019
-###    Prerequisites, a file share, AD joined, IP addressed, Schema Admins, Enterprise Admins, all variables above set
-###
-###    Prerequisties as of 7/26/2022
-###         https://docs.microsoft.com/en-us/SkypeForBusiness/plan/system-requirements
-###         Download .net Framework 4.8:  
-###                  https://go.microsoft.com/fwlink/?linkid=2088631
-###             See   https://support.microsoft.com/en-us/topic/microsoft-net-framework-4-8-offline-installer-for-windows-9d23f658-3b97-68ab-d013-aa3c3e7495e0
-###                   Place in DOTNETFRAMEWORK_4.8
-###         Download Skype For Business ISO
-###                  https://www.microsoft.com/en-us/evalcenter/download-skype-business-server-2019
-###             Open ISO and Extract folders under Skype4BusinessPath such that in the root of Skype4BusinessPath is autorun.inf, and Setup and Support Folders
-###         Download Latest Skype For Business Cumulative Update
-###             See   https://docs.microsoft.com/en-us/skypeforbusiness/sfb-server-updates
-###                   Place in Skype4BusinessCU
-###         Download Latest SQL Server 2019 Express Offline
-###                  https://download.microsoft.com/download/7/c/1/7c14e92e-bdcb-4f89-b7cf-93543e7112d1/SQLEXPRADV_x64_ENU.exe
-###                   Place in SQLServer2019
-###         Download Latest SQL Server 2019 Cumulative Update
-###                  https://XXXXXX
-###                   Place in SQLServer2019
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-clear-host
+Import-Module ActiveDirectory
+$DC = (Get-ADDomainController -Filter * | Select-Object Name | Sort-Object Name | Select-Object -First 1).Name
+$SkypeFQDN = ([System.Net.DNS]::GetHostByName($env:computerName)).hostname
+
+$TopoXML = @"
+<Topology xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.Topology.2008" Signature="bd39024c-6b05-49e9-9388-d45e4f6d5ea5">
+  <InternalDomains AllowAllDomains="false" DefaultDomain="$DomainDnsName">
+    <InternalDomain Name="$DomainDnsName" Authoritative="false" AllowSubDomains="false" />
+  </InternalDomains>
+  <Sites>
+    <CentralSite SiteId="1">
+      <Name>$DomainName</Name>
+      <Location />
+    </CentralSite>
+  </Sites>
+  <Clusters>
+    <Cluster RequiresReplication="true" RequiresSetup="true" Fqdn="$SkypeFQDN">
+      <ClusterId SiteId="1" Number="1" />
+      <Machine OrdinalInCluster="1" Fqdn="$SkypeFQDN" FaultDomain="$SkypeFQDN" UpgradeDomain="$SkypeFQDN">
+        <NetInterface InterfaceSide="Primary" InterfaceNumber="1" IPAddress="0.0.0.0" />
+        <NetInterface InterfaceSide="External" InterfaceNumber="1" IPAddress="0.0.0.0" />
+      </Machine>
+    </Cluster>
+  </Clusters>
+  <SqlInstances>
+    <SqlInstance>
+      <SqlInstanceId Name="rtc">
+        <ClusterId SiteId="1" Number="1" />
+      </SqlInstanceId>
+    </SqlInstance>
+  </SqlInstances>
+  <Services>
+    <Service RoleVersion="2" ServiceVersion="8">
+      <ServiceId SiteId="1" RoleName="UserServices" Instance="1" />
+      <DependsOn>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="UserStore" Instance="1" />
+        </Dependency>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="FileStore" Instance="1" />
+        </Dependency>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="ConfServices" Instance="1" />
+        </Dependency>
+      </DependsOn>
+      <InstalledOn>
+        <ClusterId SiteId="1" Number="1" />
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008">
+        <Port Owner="urn:component:McuFactory" Usage="WebServer" InterfaceSide="Primary" InterfaceNumber="1" Port="444" Protocol="Mtls" UrlPath="/LiveServer/McuFactory/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:PresenceFocus" Usage="UserPinManagement" InterfaceSide="Primary" InterfaceNumber="1" Port="443" Protocol="Https" UrlPath="/LiveServer/UserPinManagement/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:McuFactory" Usage="WcfServer" InterfaceSide="Primary" InterfaceNumber="1" Port="9001" Protocol="Tcp" UrlPath="/LiveServer/ConfDirMgmt/" AuthorizesRequests="false" />
+      </Ports>
+    </Service>
+    <Service RoleVersion="2" ServiceVersion="8" Type="Microsoft.Rtc.Management.Deploy.Internal.ServiceRoles.RegistrarService">
+      <ServiceId SiteId="1" RoleName="Registrar" Instance="1" />
+      <DependsOn>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="UserServices" Instance="1" />
+        </Dependency>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="WebServices" Instance="1" />
+        </Dependency>
+      </DependsOn>
+      <InstalledOn>
+        <ClusterId SiteId="1" Number="1" />
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008">
+        <Port Owner="urn:component:Registrar" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5061" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="HomeServer" />
+        <Port Owner="urn:component:Registrar" Usage="WebServer" InterfaceSide="Primary" InterfaceNumber="1" Port="444" Protocol="Mtls" UrlPath="/LiveServer/Focus/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:WinFab" Usage="WinFabFederation" InterfaceSide="Primary" InterfaceNumber="1" Port="5090" Protocol="Tcp" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:WinFab" Usage="WinFabLeaseAgent" InterfaceSide="Primary" InterfaceNumber="1" Port="5091" Protocol="Tcp" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:WinFab" Usage="WinFabClientConnection" InterfaceSide="Primary" InterfaceNumber="1" Port="5092" Protocol="Tcp" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:WinFab" Usage="WinFabIPC" InterfaceSide="Primary" InterfaceNumber="1" Port="5093" Protocol="Tcp" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:WinFab" Usage="WinFabReplication" InterfaceSide="Primary" InterfaceNumber="1" Port="5094" Protocol="Tcp" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:QoE" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5061" Protocol="Mtls" UrlPath="/LiveServer/QoE/" AuthorizesRequests="true" GruuType="QoS" />
+        <Port Owner="urn:component:Lyss" Usage="WcfMtls" InterfaceSide="Primary" InterfaceNumber="1" Port="5077" Protocol="Mtls" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:XmppFederation" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5098" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="XmppFederation" />
+      </Ports>
+      <RegistrarService xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008" IsDirector="false" IsPoolEnabledForSAOnEdge="false" />
+    </Service>
+    <Service RoleVersion="1" ServiceVersion="8">
+      <ServiceId SiteId="1" RoleName="UserStore" Instance="1" />
+      <DependsOn />
+      <InstalledOn>
+        <SqlInstanceId Name="rtc">
+          <ClusterId SiteId="1" Number="1" />
+        </SqlInstanceId>
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008" />
+    </Service>
+    <Service RoleVersion="1" ServiceVersion="8" Type="Microsoft.Rtc.Management.Deploy.Internal.ServiceRoles.FileStoreService">
+      <ServiceId SiteId="1" RoleName="FileStore" Instance="1" />
+      <DependsOn />
+      <InstalledOn>
+        <ClusterId SiteId="1" Number="1" />
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008" />
+      <FileStoreService xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008" ShareName="$CSShareName" />
+    </Service>
+    <Service RoleVersion="1" ServiceVersion="8" Type="Microsoft.Rtc.Management.Deploy.Internal.ServiceRoles.WebService">
+      <ServiceId SiteId="1" RoleName="WebServices" Instance="1" />
+      <DependsOn>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="FileStore" Instance="1" />
+        </Dependency>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="UserServices" Instance="1" />
+        </Dependency>
+      </DependsOn>
+      <InstalledOn>
+        <ClusterId SiteId="1" Number="1" />
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008">
+        <Port Owner="urn:component:OCSWebSite" Usage="WebSite" InterfaceSide="External" InterfaceNumber="1" Port="8080" Protocol="Http" UrlPath="/" AuthorizesRequests="false" ConfiguredPort="80" />
+        <Port Owner="urn:component:OCSWebSite" Usage="WebSite" InterfaceSide="External" InterfaceNumber="1" Port="4443" Protocol="Https" UrlPath="/" AuthorizesRequests="false" ConfiguredPort="443" />
+        <Port Owner="urn:component:OCSWebSite" Usage="WebSite" InterfaceSide="Primary" InterfaceNumber="1" Port="80" Protocol="Http" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:OCSWebSite" Usage="WebSite" InterfaceSide="Primary" InterfaceNumber="1" Port="443" Protocol="Https" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:Reach" Usage="PsomServer" InterfaceSide="Primary" InterfaceNumber="1" Port="8060" Protocol="Mtls" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:Reach" Usage="PsomServer" InterfaceSide="External" InterfaceNumber="1" Port="8061" Protocol="Mtls" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:MediaComp" Usage="AppSharingCommunication" InterfaceSide="Primary" InterfaceNumber="1" Port="49152" Protocol="TcpOrUdp" UrlPath="/" AuthorizesRequests="false" Range="16383" />
+        <Port Owner="urn:component:McxService" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5086" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="McxInternal" />
+        <Port Owner="urn:component:McxServiceExternal" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5087" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="McxExternal" />
+        <Port Owner="urn:component:PersistentChatWebManager" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5095" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="PersistentChatRMWebInternal" />
+        <Port Owner="urn:component:PersistentChatWebManagerExternal" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5096" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="PersistentChatRMWebExternal" />
+        <Port Owner="urn:component:UcwaService" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5088" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="UcwaInternal" />
+        <Port Owner="urn:component:UcwaServiceExternal" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5089" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="UcwaExternal" />
+        <Port Owner="urn:component:PlatformService" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="6008" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="PlatformServiceInternal" />
+      </Ports>
+      <WebService xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008">
+        <ExternalSettings Host="$SkypeFQDN">
+          <OverrideUrls />
+        </ExternalSettings>
+        <WebComponents xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.WebServices.2011">
+          <Component ComponentName="ABHandler" />
+          <Component ComponentName="ABFiles" />
+          <Component ComponentName="AutodiscoverService" />
+          <Component ComponentName="CAHandler" />
+          <Component ComponentName="CAHandlerAnon" />
+          <Component ComponentName="CollabContent" />
+          <Component ComponentName="Cscp" />
+          <Component ComponentName="DataCollabWeb" />
+          <Component ComponentName="DeviceUpdateDownload" />
+          <Component ComponentName="DeviceUpdateStore" />
+          <Component ComponentName="Dialin" />
+          <Component ComponentName="DLExpansion" />
+          <Component ComponentName="LIService" />
+          <Component ComponentName="Lwa" />
+          <Component ComponentName="McxService" />
+          <Component ComponentName="Meet" />
+          <Component ComponentName="OnlineAuth" />
+          <Component ComponentName="PowerShell" />
+          <Component ComponentName="Reach" />
+          <Component ComponentName="RgsAgentService" />
+          <Component ComponentName="StoreWeb" />
+          <Component ComponentName="UcwaService" />
+          <Component ComponentName="WebScheduler" />
+          <Component ComponentName="WebTicket" />
+          <Component ComponentName="PersistentChatWeb" />
+          <Component ComponentName="PersistentChatWebManager" />
+          <Component ComponentName="HybridConfigService" />
+        </WebComponents>
+        <UpaSeparator xmlns="urn:schema:Microsoft.Rtc.Management.BaseTypes.2008" />
+      </WebService>
+    </Service>
+    <Service RoleVersion="1" ServiceVersion="8" Type="Microsoft.Rtc.Management.Deploy.Internal.ServiceRoles.ConfService">
+      <ServiceId SiteId="1" RoleName="ConfServices" Instance="1" />
+      <DependsOn>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="FileStore" Instance="1" />
+        </Dependency>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="WebServices" Instance="1" />
+        </Dependency>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="UserServices" Instance="1" />
+        </Dependency>
+      </DependsOn>
+      <InstalledOn>
+        <ClusterId SiteId="1" Number="1" />
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008">
+        <Port Owner="urn:component:IMConf" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5062" Protocol="Mtls" UrlPath="/" AuthorizesRequests="false" GruuType="chat" />
+        <Port Owner="urn:component:IMConf" Usage="WebServer" InterfaceSide="Primary" InterfaceNumber="1" Port="444" Protocol="Mtls" UrlPath="/LiveServer/IMMcu/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:DataConf" Usage="PsomClient" InterfaceSide="Primary" InterfaceNumber="1" Port="8057" Protocol="Tls" UrlPath="/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:AVConf" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5063" Protocol="Mtls" UrlPath="/" AuthorizesRequests="false" GruuType="audio-video" />
+        <Port Owner="urn:component:AppSharingConf" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5065" Protocol="Mtls" UrlPath="/" AuthorizesRequests="false" GruuType="applicationsharing" />
+        <Port Owner="urn:component:DataConf" Usage="WebServer" InterfaceSide="Primary" InterfaceNumber="1" Port="444" Protocol="Mtls" UrlPath="/LiveServer/DataMcu/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:AVConf" Usage="WebServer" InterfaceSide="Primary" InterfaceNumber="1" Port="444" Protocol="Mtls" UrlPath="/LiveServer/AVMcu/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:AppSharingConf" Usage="WebServer" InterfaceSide="Primary" InterfaceNumber="1" Port="444" Protocol="Mtls" UrlPath="/LiveServer/ASMcu/" AuthorizesRequests="false" />
+        <Port Owner="urn:component:MediaComp" Usage="AudioCommunication" InterfaceSide="Primary" InterfaceNumber="1" Port="49152" Protocol="TcpOrUdp" UrlPath="/" AuthorizesRequests="false" Range="8348" />
+        <Port Owner="urn:component:MediaComp" Usage="VideoCommunication" InterfaceSide="Primary" InterfaceNumber="1" Port="57501" Protocol="TcpOrUdp" UrlPath="/" AuthorizesRequests="false" Range="8034" />
+        <Port Owner="urn:component:MediaComp" Usage="AppSharingCommunication" InterfaceSide="Primary" InterfaceNumber="1" Port="49152" Protocol="TcpOrUdp" UrlPath="/" AuthorizesRequests="false" Range="16383" />
+      </Ports>
+      <ConfService xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008">
+        <MCUs>
+          <MCU ComponentName="IMConf" Vendor="Microsoft" />
+          <MCU ComponentName="DataConf" Vendor="Microsoft" MinSupportedMode="14" />
+          <MCU ComponentName="AppSharingConf" Vendor="Microsoft" />
+          <MCU ComponentName="AVConf" Vendor="Microsoft" />
+        </MCUs>
+      </ConfService>
+    </Service>
+    <Service RoleVersion="1" ServiceVersion="8" Type="Microsoft.Rtc.Management.Deploy.Internal.ServiceRoles.ApplicationServerService">
+      <ServiceId SiteId="1" RoleName="ApplicationServer" Instance="1" />
+      <DependsOn>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="Registrar" Instance="1" />
+        </Dependency>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="FileStore" Instance="1" />
+        </Dependency>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="ApplicationStore" Instance="1" />
+        </Dependency>
+      </DependsOn>
+      <InstalledOn>
+        <ClusterId SiteId="1" Number="1" />
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008">
+        <Port Owner="urn:application:testbot" Usage="SipServer" InterfaceSide="Primary" InterfaceNumber="1" Port="5076" Protocol="Mtls" UrlPath="/" AuthorizesRequests="true" GruuType="Microsoft.Rtc.Applications.TestBot" />
+        <Port Owner="urn:component:MediaComp" Usage="AudioCommunication" InterfaceSide="Primary" InterfaceNumber="1" Port="49152" Protocol="TcpOrUdp" UrlPath="/" AuthorizesRequests="false" Range="8348" />
+        <Port Owner="urn:component:MediaComp" Usage="VideoCommunication" InterfaceSide="Primary" InterfaceNumber="1" Port="57501" Protocol="TcpOrUdp" UrlPath="/" AuthorizesRequests="false" Range="8034" />
+        <Port Owner="urn:component:MediaComp" Usage="AppSharingCommunication" InterfaceSide="Primary" InterfaceNumber="1" Port="49152" Protocol="TcpOrUdp" UrlPath="/" AuthorizesRequests="false" Range="16383" />
+      </Ports>
+      <ApplicationServerService xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008" />
+    </Service>
+    <Service RoleVersion="1" ServiceVersion="8">
+      <ServiceId SiteId="1" RoleName="ApplicationStore" Instance="1" />
+      <DependsOn />
+      <InstalledOn>
+        <SqlInstanceId Name="rtc">
+          <ClusterId SiteId="1" Number="1" />
+        </SqlInstanceId>
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008" />
+    </Service>
+    <Service RoleVersion="1" ServiceVersion="8" Type="Microsoft.Rtc.Management.Deploy.Internal.ServiceRoles.CentralMgmtService">
+      <ServiceId SiteId="1" RoleName="CentralMgmt" Instance="1" />
+      <DependsOn>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="CentralMgmtStore" Instance="1" />
+        </Dependency>
+        <Dependency Usage="Default">
+          <ServiceId SiteId="1" RoleName="FileStore" Instance="1" />
+        </Dependency>
+      </DependsOn>
+      <InstalledOn>
+        <ClusterId SiteId="1" Number="1" />
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008" />
+      <CentralMgmtService xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008" IsActive="true" />
+    </Service>
+    <Service RoleVersion="1" ServiceVersion="8">
+      <ServiceId SiteId="1" RoleName="CentralMgmtStore" Instance="1" />
+      <DependsOn />
+      <InstalledOn>
+        <SqlInstanceId Name="rtc">
+          <ClusterId SiteId="1" Number="1" />
+        </SqlInstanceId>
+      </InstalledOn>
+      <Ports xmlns="urn:schema:Microsoft.Rtc.Management.Deploy.ServiceRoles.2008" />
+    </Service>
+  </Services>
+</Topology>
+"@
 
 # =============================================================================
 # FUNCTIONS
 # =============================================================================
 
-Function Test-FilePath ($File)
+Function Set-SfB-CentralMgmtStore
 {
-    If (!(Test-Path -Path $File)) {Throw "ERROR: Unable to locate $File"} 
-}
-
-Function Check-PendingReboot
-{
-    If (!(Get-Module -ListAvailable -Name PendingReboot)) 
+    Write-Verbose "----- Entering Set-SfB-CentralMgmtStore function -----"
+    
+    # Install CentralMgmtStore
+    If (!(Test-CsDatabase -CentralManagementDatabase))
     {
-        Test-FilePath ("$InstallShare\Install-PendingReboot\PendingReboot")
-        Copy-Item -Path "$InstallShare\Install-PendingReboot\PendingReboot" -Destination "C:\Program Files\WindowsPowerShell\Modules" -Recurse -Force
+        Write-Host "Installing Central Management Store (CMS) - database" -ForegroundColor Green
+        Install-CsDatabase -CentralManagementDatabase -SqlServerFqdn "$SkypeFQDN" -SqlInstanceName Rtc -Report "$env:TEMP\Install-CsDatabase-RTC-$DTG.html"
+        Test-CsDatabase -CentralManagementDatabase
     }
 
-    Import-Module PendingReboot
-    [bool] (Test-PendingReboot -SkipConfigurationManagerClientCheck).IsRebootPending
+    # Set the Service Control Point for the CentralMgmtStore in AD
+    If (!((Get-CsConfigurationStoreLocation).BackEndServer -eq "$SkypeFQDN\rtc"))
+    {
+        Write-Host "Setting the Service Control Point for the CentralMgmtStore in AD:" -ForegroundColor Green
+        Set-CsConfigurationStoreLocation -SqlServerFqdn "$SkypeFQDN" -SqlInstanceName Rtc -Force -Report "$env:TEMP\Set-CsConfigurationStoreLocation-$DTG.html"
+        (Get-CsConfigurationStoreLocation).BackEndServer
+    }
+}
+
+Function Set-SfB-Topology
+{
+    Write-Verbose "----- Entering Set-SfB-Topology function -----"
+    
+    # Publish and Enable Topology
+    If (!(Get-CsTopology))
+    {
+        Write-Host "Publishing and Enabling Topology" -ForegroundColor Green
+        $TopoXML | Out-File "$env:TEMP\Publish-CsTopology-$DTG.xml" -Force
+        Publish-CsTopology -FileName "$env:TEMP\Publish-CsTopology-$DTG.xml" -Force -Report "$env:TEMP\Publish-CsTopology-$DTG.html"
+        Enable-CsTopology -Report "$env:TEMP\Enable-CsTopology-$DTG.html"
+    }
+}
+
+Function New-SfB-RTCLOCAL
+{
+    Write-Verbose "----- Entering New-SfB-RTCLOCAL function -----"
+    
+    If ((Get-Service | Where {$_.Name -eq 'MSSQL$RTCLOCAL'}).count -eq 0) 
+    {
+        Write-Host "Installing Local Configuration Store - SQL Express Instance" -ForegroundColor Green
+        Test-FilePath ("C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe")
+        Test-FilePath ("$Skype4BusinessPath\Setup\amd64") 
+        $FilePath = "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe"
+        $Args = @(
+        '/Bootstraplocalmgmt'
+        '/SourceDirectory'
+        "$Skype4BusinessPath\Setup\amd64"
+        )
+        Start-Process -FilePath $FilePath -ArgumentList $Args -Wait  
+    }
+    Else 
+    {
+        Write-Host "Local Configuration Store - SQL Express Instance already exists." -ForegroundColor Green
+    }
+
+    # Install Local Configuration Store (replica of CMS) within RTCLOCAL
+    Write-Host "Installing Local Configuration Store - database" -ForegroundColor Green
+    Install-CsDatabase -ConfiguredDatabases -SqlServerFqdn "$SkypeFQDN" -Report "$env:TEMP\Install-CsDatabase-RTCLOCAL-$DTG.html"
+
+    If (!(Test-CsDatabase -ConfiguredDatabases -SqlServerFqdn "$SkypeFQDN"))
+    {
+        #Install-CsDatabase -ConfiguredDatabases -SqlServerFqdn "$SkypeFQDN" -Report "$env:TEMP\Install-CsDatabase-RTCLOCAL-$DTG.html"
+    }
+
+    # Copy Topology to Local Configuration Store and Enable Replica
+    $CsConfig = Export-CsConfiguration -AsBytes
+    Import-CsConfiguration -ByteInput $CsConfig -LocalStore
+    Enable-CsReplica -Report "$env:TEMP\Enable-CsReplica-$DTG.html"
+    Start-CSwindowsService Replica -Report "$env:TEMP\Start-CSwindowsService-Replica-$DTG.html"
+    Get-CsWindowsService Replica
+}
+
+Function New-SfB-LYNCLOCAL
+{
+    Write-Verbose "----- Entering New-SfB-LYNCLOCAL function -----"
+    
+    If ((Get-Service | Where {$_.Name -eq 'MSSQL$LYNCLOCAL'}).count -eq 0) 
+    {
+        Write-Host "Installing LYNCLOCAL - SQL Express Instance" -ForegroundColor Green
+        Test-FilePath ("C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe")
+        Test-FilePath ("$Skype4BusinessPath\Setup\amd64") 
+        $FilePath = "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe"
+        $Args = @(
+        '/SourceDirectory'
+        "$Skype4BusinessPath\Setup\amd64"
+        )
+        Start-Process -FilePath $FilePath -ArgumentList $Args -Wait  
+    }
+    Else 
+    {
+        Write-Host "LYNCLOCAL - SQL Express Instance already exists." -ForegroundColor Green
+    }
+}
+
+Function Set-SfB-DNS
+{
+    Write-Verbose "----- Entering Set-SfB-DNS function -----"
+
+    Import-Module DNSServer
+    Write-Host "Configuring DNS for Skype for Business" -ForegroundColor Green
+
+    $TestDNS1 = Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name dialin -RRType CName -ErrorAction "SilentlyContinue"
+    If(!($TestDNS1)) 
+    {
+        Add-DnsServerResourceRecordCName -ZoneName $DomainDnsName -ComputerName $DC -Name dialin -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+        Write-Host "The following DNS CNAME record was successfully created:" -ForegroundColor Yellow
+        Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name dialin -RRType CName
+    }
+
+    $TestDNS2 = Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name meet -RRType CName -ErrorAction "SilentlyContinue"
+    If(!($TestDNS2)) 
+    {
+        Add-DnsServerResourceRecordCName -ZoneName $DomainDnsName -ComputerName $DC -Name meet -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+        Write-Host "The following DNS CNAME record was successfully created:" -ForegroundColor Yellow
+        Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name meet -RRType CName
+    }
+
+    $TestDNS3 = Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name lyncdiscoverinternal -RRType CName -ErrorAction "SilentlyContinue"
+    If(!($TestDNS3)) 
+    {
+        Add-DnsServerResourceRecordCName -ZoneName $DomainDnsName -ComputerName $DC -Name lyncdiscoverinternal -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+        Write-Host "The following DNS CNAME record was successfully created:" -ForegroundColor Yellow
+        Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name lyncdiscoverinternal -RRType CName
+    }
+
+    $TestDNS4 = Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name lyncdiscover -RRType CName -ErrorAction "SilentlyContinue"
+    If(!($TestDNS4)) 
+    {
+        Add-DnsServerResourceRecordCName -ZoneName $DomainDnsName -ComputerName $DC -Name lyncdiscover -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+        Write-Host "The following DNS CNAME record was successfully created:" -ForegroundColor Yellow
+        Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name lyncdiscover -RRType CName
+    }
+
+    $TestDNS5 = Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name sip -RRType CName -ErrorAction "SilentlyContinue"
+    If(!($TestDNS5)) 
+    {
+        Add-DnsServerResourceRecordCName -ZoneName $DomainDnsName -ComputerName $DC -Name sip -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
+        Write-Host "The following DNS CNAME record was successfully created:" -ForegroundColor Yellow
+        Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name sip -RRType CName
+    }
+
+    $TestDNS6 = Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name "_sipinternaltls._tcp" -RRType Srv -ErrorAction "SilentlyContinue"
+    If(!($TestDNS6)) 
+    {
+        #Add-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name "_sipinternaltls._tcp" -Srv -DomainName "$SkypeFQDN" -Priority 0 -Weight 0 -Port 5060 -TimeToLive 00:05:00
+        Add-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name "_sipinternaltls._tcp" -Srv -DomainName $DomainDnsName -Priority 0 -Weight 0 -Port 5060 -TimeToLive 00:05:00
+        Write-Host "The following DNS SRV record was successfully created:" -ForegroundColor Yellow
+        Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name "_sipinternaltls._tcp" -RRType Srv
+    }
+
+    $URL1 = New-CsSimpleUrlEntry -Url "https://dialin.$DomainDnsName"
+    $SimpleURL1 = New-CsSimpleUrl -Component "dialin" -Domain "*" -SimpleUrlEntry $URL1 -ActiveUrl "https://dialin.$DomainDnsName"
+    $URL2 = New-CsSimpleUrlEntry -Url "https://meet.$DomainDnsName"
+    $SimpleURL2 = New-CsSimpleUrl -Component "meet" -Domain "$DomainDnsName" -SimpleUrlEntry $URL2 -ActiveUrl "https://meet.$DomainDnsName"
+    $URL3 = New-CsSimpleUrlEntry -Url "https://admin.$DomainDnsName"
+    $SimpleURL3 = New-CsSimpleUrl -Component "Cscp" -Domain "*" -SimpleUrlEntry $URL3 -ActiveUrl "https://admin.$DomainDnsName"
+
+    Remove-CsSimpleUrlConfiguration -Identity "Global"     
+    Set-CsSimpleUrlConfiguration -Identity "Global" -SimpleUrl @{Add=$SimpleURL1,$SimpleURL2,$SimpleURL3}
+    Enable-CsComputer -Report "$env:TEMP\Enable-CsComputer-$DTG.html"
+}
+
+Function Test-SfB-Cert ($CertTemplate)
+{
+    Write-Host "Checking if certificate derived from $CertTemplate is in local store" -ForegroundColor Green
+    $CertCheck = [bool] (Get-ChildItem Cert:\LocalMachine\My | ? {$_.Extensions.format(1)[0] -match "Template=$CertTemplate"})
+    Write-Host $CertCheck
+    return $CertCheck
+}
+
+Function Install-SfB-Certs
+{
+    Write-Verbose "----- Entering Install-SfB-Certs function -----"
+    
+    If (!(Test-SfB-Cert ("$CertTemplate"))) 
+    {
+        Write-Host "Installing certificate derived from $CertTemplate template" -ForegroundColor Green
+        $Template = $CertTemplate.Replace(" ","")
+        $Certificate = Get-Certificate -Template $Template -DNSName $SkypeFQDN,dialin.$DomainDnsName,meet.$DomainDnsName,lyncdiscoverinternal.$DomainDnsName,lyncdiscover.$DomainDnsName,sip.$DomainDnsName -CertStoreLocation cert:\LocalMachine\My -subjectname cn=$SkypeFQDN
+    }
+
+    If (Test-SfB-Cert ("$CertTemplate"))
+    {
+        Write-Host "Assigning certificates based on the defined Topology" -ForegroundColor Green
+        $InstalledCert = Get-ChildItem Cert:\LocalMachine\My | ? {$_.Extensions.format(1)[0] -match "Template=$CertTemplate"}
+        Set-CSCertificate -Type Default,WebServicesInternal,WebServicesExternal -Thumbprint $InstalledCert.Thumbprint -Confirm:$false -Report "$env:TEMP\Set-CSCertificate-$Template.html"
+        $InstalledCert | fl
+    }
 }
 
 # =============================================================================
 # MAIN ROUTINE
 # =============================================================================
 
-# Check pending reboot
-If (Check-PendingReboot) {Write-Host "WARNING: Pending reboot on $env:COMPUTERNAME" -ForegroundColor Yellow}
+Import-Module "C:\Program Files\Common Files\Skype for Business Server 2019\Modules\SkypeForBusiness\SkypeForBusiness.psd1"
 
+Set-SfB-CentralMgmtStore
+Set-SfB-Topology
 
-$BootStrapCore = Get-Package | where {$_.Name -like "Skype for Business Server 2019, Core Components"}
-If ($BootStrapCore.count -eq '0') 
-{
-    write-host "Installing Skype for Business Server Core" -ForegroundColor Green
-    start-process $Skype4BusinessPath"\Setup\amd64\setup.exe" -Wait -Argumentlist "/bootstrapcore"
-}
-Else 
-{
-    write-host "Skype for Business Server detected, skipping bootstrap core" -Foregroundcolor green
-}
+# Install RTCLOCAL and LYNCLOCAL instances and databases
+New-SfB-RTCLOCAL
+New-SfB-LYNCLOCAL
 
-####
-####  Check is ADPS Module is installed before proceeding with Schema check, currently not working consistently, will attempt to update ####       schema when get-addomain fails
-####
-$BootStrapCore = Get-Package | where {$_.Name -like "Skype for Business Server 2019, Core Components"}
-If ($BootStrapCore.count -eq '1') 
-{
-    import-module "C:\Program Files\Common Files\Skype for Business Server 2019\Modules\SkypeForBusiness\SkypeForBusiness.psd1"
-    import-module ActiveDirectory 2>&1 | out-null
-    $ADPSModule = get-module | ? {$_.Name -eq "ActiveDirectory"}
-    If ($ADPSModule.count -eq '1') 
-    {
-        $ADOSchemaLocation = 'CN=Schema,CN=Configuration,'+$LDAPDomain
-        If ((get-adobject -SearchBase $ADOSchemaLocation -filter * | Where {$_.DistinguishedName -like "CN=ms-RTC-SIP-SchemaVersion*"}).count -eq 0) 
-        {
-            $ADSchemaLocation = 'AD:\CN=Schema,CN=Configuration,'+$LDAPDomain
-            $SkypeSchemaLocation = 'AD:\CN=ms-RTC-SIP-SchemaVersion,CN=Schema,CN=Configuration,'+$LDAPDomain
-            $ADSchema = Get-ItemProperty $SkypeSchemaLocation -Name rangeUpper
-            If ($ADSchema.rangeUpper -lt '1149') 
-            {
-                write-host "Extending AD Schema for Skype For Business" -Foregroundcolor green
-                Install-CSAdServerSchema -Confirm:$false
-                write-host "Pausing for Schema replication" -Foregroundcolor green
-                Start-Sleep -seconds 300
-            }
-        }
-        Else 
-        {
-            write-host "Active Directory Schema already extended for Skype For Business 2019" -ForegroundColor Green
-        }
-    }
-    Else 
-    {
-        write-host "Active Directory PowerShell not detected, skipping Schema check" -ForegroundColor Red
-        exit
-    }
-}
-Else 
-{
-    write-host "Skype for Business Server not detected, skipping schema check" -Foregroundcolor green
-    exit
-}
+# Create CNAMEs in DNS
+Set-SfB-DNS
 
-### Prepare Forest
-###     TO DO: Check to see if Forest Already Prepared, Group CSAdministrators?
-###            Check if member of Enteprise Admins
-$CSAdminsobj = Get-ADGroup -LDAPFilter "(SAMAccountName=CSAdministrator)"
-$BootStrapCore = Get-Package | where {$_.Name -like "Skype for Business Server 2019, Core Components"}
-If ($BootStrapCore.count -eq '1') 
-{
-    If ($CSAdminsobj -eq $null)
-    {
-        write-host "Preparing Forest for Skype For Business." -ForegroundColor Green
-        Enable-CSAdForest  -Verbose -Confirm:$false
-        write-host "Forest Prepared for Skype For Business." -ForegroundColor Green
-        write-host "Pausing for Forest Prep replication." -Foregroundcolor green
-        Start-Sleep -seconds 300
-    }
-    Else 
-    {
-        write-host "Forest Already Prepared for Skype For Business 2019." -ForegroundColor Green
-    }
-}
-Else 
-{
-    write-host "Skype for Business Server not detected, skipping forest prep." -Foregroundcolor green
-}
+# Request and install certificate
+Install-SfB-Certs
 
-### Prepare Domain
-$ADDomainPrep = get-csaddomain
-If ($ADDomainPrep -ne "LC_DOMAINSETTINGS_STATE_READY") 
-{ 
-    write-host "Preparing Domain for Skype For Business." -ForegroundColor Green
-    Enable-CSAdDomain -Verbose -Confirm:$false
-    write-host "Domain Prepared for Skype For Business." -ForegroundColor Green
-}
-Else 
-{
-    write-host "Domain already prepared for Skype For Business." -Foregroundcolor green
-}
-
-###Add to  CSAdministrators and RTCUniversalServerAdmins
-If ($CSAdminsobj -ne $null) 
-{
-    $CSAdminsMembers = Get-ADGroupMember -Identity CSAdministrator -Recursive | Select -ExpandProperty Name
-    If ($CSAdminsMembers -contains $env:UserName)
-    {
-        write-host $env:UserName "already in CSAdministrator Group." -Foregroundcolor green
-    }
-    Else 
-    {
-        Add-AdGroupMember -identity "CSAdministrator" -members $env:UserName
-        write-host $env:UserName "added to CSAdministrator.  Logoff and Logon may be needed before proceeding." -Foregroundcolor red
-    }
-}
-
-
-$RTCUniversalServerAdminsobj = Get-ADGroup -LDAPFilter "(SAMAccountName=RTCUniversalServerAdmins)"
-If ($RTCUniversalServerAdminsobj -ne $null) 
-{
-    $RTCUniversalServerAdminsMembers = Get-ADGroupMember -Identity RTCUniversalServerAdmins -Recursive | Select -ExpandProperty Name
-    If ($RTCUniversalServerAdminsMembers -contains $env:UserName) 
-    {
-        write-host $env:UserName "already in RTCUniversalServerAdmins Group." -Foregroundcolor green
-    }
-    Else 
-    {
-        Add-AdGroupMember -identity "RTCUniversalServerAdmins" -members $env:UserName
-        write-host $env:UserName "added to RTCUniversalServerAdmins.  Logoff and Logon may be needed before proceeding." -Foregroundcolor red
-    }
-}
-
-####Install Admin Tools
-$AdminTools  = Get-Package | where {$_.Name -like "Skype for Business Server 2019, Administrative Tools*"}
-If ($AdminTools.count -eq '1') 
-{
-    write-host "Skype for Business Server 2019, Administrative Tools already installed." -ForegroundColor Green
-}
-Else 
-{
-    write-host "Installing Skype for Business Server 2019, Administrative Tools" -Foregroundcolor green
-    start-process msiexec.exe -Wait -Argumentlist " /i $Skype4BusinessPath\Setup\amd64\Setup\admintools.msi /qn"
-}
-
-IF ((get-fileshare | ? {$_.Name -eq $CSShareName}).count -eq "0") 
-{
-    write-host "Creating CSShare" -Foregroundcolor green
-    [system.io.directory]::CreateDirectory($CSShareNamePath)
-    New-SMBShare -Name $CSShareName -Path $CSShareNamePath -FullAccess "Authenticated Users" -CachingMode None
-}
-Else 
-{
-    Write-host "CSShare already exists." -ForegroundColor Green
-}
-
-If ((get-service | Where {$_.Name -eq 'MSSQL$RTC'}).count -eq 0) 
-{
-    Write-host "Creating CMS Database." -ForegroundColor Green
-    start-process "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" -Wait -Argumentlist " /BootstrapSQLExpress"
-    start-process "netsh" -Wait -Argumentlist ' advfirewall firewall add rule name="SQL Browser" dir=in action=allow protocol=UDP localport=1434'
-}
-Else 
-{
-    Write-host "CMS Database already exists." -ForegroundColor Green
-}
-
-If ((get-service | Where {$_.Name -eq 'MSSQL$RTCLOCAL'}).count -eq 0) 
-{
-    Write-host "Creating Local Configuration Store." -ForegroundColor Green
-    start-process "netsh" -Wait -Argumentlist ' advfirewall firewall add rule name="SQL Browser" dir=in action=allow protocol=UDP localport=1434'
-    start-process "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" -Wait -Argumentlist " /BootstrapLocalMgmt"
-    Write-host "Local Configuration Store created.  Importing Configuration into Local Store." -ForegroundColor Green
-    $CSConfiguration = Export-CsConfiguration -AsBytes
-    Import-CsConfiguration -ByteInput $CSConfiguration -LocalStore
-    Write-host "Enabling Replica." -ForegroundColor Green
-    Enable-CSReplica -force
-    Write-host "Replica enabled.  Installing Skype For Business Roles" -ForegroundColor Green
-    ###### Replicate-CsCmsCertificates
-    start-process "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" -Wait
-}
-Else 
-{
-    Write-host "Local Configuration Store already exists." -ForegroundColor Green
-}
-
-Write-Host 'Obtaining New Certificate' -ForegroundColor Green
-If ((get-adgroup -identity "Web Servers").ObjectClass -eq "group") 
-{
-    Add-AdGroupMember -identity "Web Servers" -members $env:COMPUTERNAME$
-    $SkypeFQDN = ([System.Net.DNS]::GetHostByName($env:computerName)).hostname
-    $Certificate = Get-Certificate -Template $CertTemplate -DNSName $SkypeFQDN,dialin.$DomainDnsName,meet.$DomainDnsName,lyncdiscoverinternal.$DomainDnsName,lyncdiscover.$DomainDnsName,sip.$DomainDnsName -CertStoreLocation cert:\LocalMachine\My -subjectname cn=$SkypeFQDN
-    Set-CSCertificate -Type Default,WebServicesInternal,WebServicesExternal -Thumbprint $Certificate.certificate.thumbprint -Confirm:$false
-    $Certificate | FL
-}
-
-If ((get-package | where {($_.Name -like "Skype for Business*") -and ($_.Version -eq "7.0.2046.0")}).count -gt '9') 
-{
-    write-host "Applying Skype for Business Server Cumulative Update." -ForegroundColor Green
-    start-process $SkypeForBusinessCUPath"\SkypeServerUpdateInstaller" -Wait -Argumentlist "/silentmode"
-    Stop-CsWindowsService
-    start-process "net " -Wait -Argumentlist " stop w3svc"
-    Install-CsDatabase -Update -LocalDatabases
-}
-Else 
-{
-    write-host "Skype for Business not installed or Skype for Business Cumulative Updates already Applied." -Foregroundcolor green
-}
-
-If ((get-service | ? {$_.Name -like 'MSSQL*'}).count -eq 3) 
-{
-    If ((Test-PendingReboot) -eq $false)
-    {
-        write-host "Checking SQL Server Version on RTC." -ForegroundColor Green
-        If ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").RTC -eq "MSSQL13.RTC")
-        {
-            write-host "Upgrading RTC SQL Server instance to SQL Server 2019." -Foregroundcolor green
-            Stop-CsWindowsService
-            start-process "net " -Wait -Argumentlist " stop w3svc"
-            Start-Sleep -seconds 300
-            ####start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTC /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
-            start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTC /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=1 /UpdateSource=$SQLServer2019Path"
-        }
-        Else 
-        {
-            write-host "RTC SQL Server instance is SQL Server 2019." -Foregroundcolor green
-        }
-        
-        write-host "Checking SQL Server Version on RTCLOCAL." -ForegroundColor Green
-        If ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").RTCLOCAL -eq "MSSQL13.RTCLOCAL")
-        {
-            write-host "Upgrading RTCLOCAL SQL Server instance to SQL Server 2019." -Foregroundcolor green
-            Stop-CsWindowsService
-            start-process "net " -Wait -Argumentlist " stop w3svc"
-            Start-Sleep -seconds 300
-            ####start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
-            start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=RTCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=1 /UpdateSource=$SQLServer2019Path"
-        }
-        Else 
-        {
-            write-host "RTCLOCAL SQL Server instance is SQL Server 2019." -Foregroundcolor green
-        }
-        
-        write-host "Checking SQL Server Version on LYNCLOCAL." -ForegroundColor Green
-        If ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").LYNCLOCAL -eq "MSSQL13.LYNCLOCAL")
-        {
-            write-host "Upgrading LYNCLOCAL SQL Server instance to SQL Server 2019." -Foregroundcolor green
-            Stop-CsWindowsService
-            start-process "net " -Wait -Argumentlist " stop w3svc"
-            Start-Sleep -seconds 300
-            ####start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=LYNCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=0"
-            start-process $SQLServer2019Path"\SQLEXPRADV_x64_ENU.exe" -Wait -Argumentlist " /qs /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=LYNCLOCAL /HIDECONSOLE /ERRORREPORTING=0 /UpdateEnabled=1 /UpdateSource=$SQLServer2019Path"
-        }
-        Else 
-        {
-            write-host "RTC SQL Server instance is SQL Server 2019." -Foregroundcolor green
-        }
-    }
-    Else 
-    {
-        write-host "Reboot Needed before SQL Server Updates can be performed." -Foregroundcolor red
-    }
-}
-Else 
-{
-    write-host "3 SQL Server Instanaces not present or reboot needed." -Foregroundcolor green
-}
-
-
-###################################################################################################
-#### DNS Entries
-####       Need to get IP address and name from variables
-write-host 'Checking DNS for' meet.$DomainDnsName -ForegroundColor Green
-
-$dnsresolve = resolve-dnsname meet.$DomainDnsName 2>&1 | out-null
-
-IF ($dnsresolve.count -eq 0)
-{
-    Import-Module DNSServer
-    $dotDomainDNSName = "." + $DomainDNSName
-    $addomaincontroller = (get-addomaincontroller).name
-    $SkypeFQDN = ([System.Net.DNS]::GetHostByName($env:computerName)).hostname
-    $DNSZone = get-dnsserverzone -computername $addomaincontroller -name $DomainDNSName
-    Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name dialin -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
-    Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name meet -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
-    Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name lyncdiscoverinternal -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
-    Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name lyncdiscover -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
-    Add-DnsServerResourceRecord -cname -Computername $addomaincontroller -ZoneName $DNSZone.ZoneName -name sip -HostNameAlias $SkypeFQDN -TimeToLive 00:05:00
-    Add-DnsServerResourceRecord -Srv -Name "_sipinternaltls._tcp" -ZoneName $DNSZone.ZoneName -DomainName $DomainDnsName -Priority 0 -Weight 0 -Port 5060 -TimeToLive 00:05:00
-}
-
-###################################################################################################
 Stop-Transcript
-
-######################################### REBOOT SERVER ###########################################

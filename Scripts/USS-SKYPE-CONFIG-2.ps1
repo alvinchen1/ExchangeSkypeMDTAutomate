@@ -1,6 +1,6 @@
 <#
 NAME
-    USS-SKYPE-CONFIG-2.ps1
+    SKYPE-CONFIG-2.ps1
 
 SYNOPSIS
     Installs Windows Features to support Skype for Business

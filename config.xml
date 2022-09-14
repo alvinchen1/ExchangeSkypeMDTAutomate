@@ -1,25 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Installer version="1.0.0.0">
+  <Component Name="Deployment">
+	<Settings>
+		<Configuration Name="Site" Value="OFFICE"/>
+	</Settings>
+  </Component>
   <Component Name="WindowsServer">
 	<Settings>
-		<Configuration Name="InstallShare" Value="\\DEV-MDT-01\STAGING"/>
+		<Configuration Name="InstallShare" Value="\\DEP-MDT-01\STAGING"/>
 		<Configuration Name="DomainName" Value="USS"/>
 		<Configuration Name="DomainDnsName" Value="USS.LOCAL"/>
 		<Configuration Name="DomainDistinguishedName" Value="DC=USS,DC=LOCAL"/>
 		<Configuration Name="SxSStore" Value="source\WS2019\Sources\SxS"/>
-		<Configuration Name="USS-SRV-11" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="USS-SRV-12" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="USS-SRV-16" Type="Features" Value="BitLocker,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="USS-SRV-17" Type="Features" Value="ADCS-Cert-Authority,RSAT-AD-PowerShell,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="USS-SRV-18" Type="Features" Value="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-50" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-51" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-54" Type="Features" Value="BitLocker,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-55" Type="Features" Value="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-56" Type="Features" Value="ADCS-Cert-Authority,RSAT-AD-PowerShell,GPMC,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>		
 	</Settings>
   </Component>
   <Component Name="PKI">
 	<Settings>
-		<Configuration Name="RootCA" Value="USS-SRV-18"/>
+		<Configuration Name="RootCA" Value="USS-SRV-55"/>
 		<Configuration Name="RootCACred" Value="!QAZ2wsx#EDC4rfv"/>
-		<Configuration Name="CDP" Value="USS-SRV-16"/>
-		<Configuration Name="IssuingCA" Value="USS-SRV-17"/>
+		<Configuration Name="CDP" Value="USS-SRV-54"/>
+		<Configuration Name="IssuingCA" Value="USS-SRV-56"/>
 	</Settings>
   </Component>
   <Component Name="Exchange">
