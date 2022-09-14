@@ -3,7 +3,7 @@ NAME
     SKYPE-CONFIG-5.ps1
 
 SYNOPSIS
-    Updates Skype for Business
+    Updates Skype for Business and upgrades SQL Express 2016 to 2019
 
 SYNTAX
     .\$ScriptName
@@ -29,7 +29,7 @@ $SkypeForBusinessCUPath = "$InstallShare\Skype4BusinessCU"
 $SkypeForBusinessCUVer = "7.0.2046.404" # See https://docs.microsoft.com/en-us/skypeforbusiness/sfb-server-updates
 $SQLServer2019Path = "$InstallShare\SQLServer2019\Express"
 $SQLServer2019CU = "$InstallShare\SQLServer2019\CU"
-$SQLServer2019CUVer = "15.0.4249.2" # Patched SQL version with CU; see https://sqlserverbuilds.blogspot.com/#sql2019x
+$SQLServer2019CUVer = "15.0.4249.2" # Patched SQL version with CU; see https://support.microsoft.com/help/4518398
  
 # =============================================================================
 # FUNCTIONS
@@ -56,9 +56,11 @@ Function Update-SfB
 {
     Write-Verbose "----- Entering Update-SfB function -----"
     
-    If ((Get-CsServerPatchVersion | where ComponentName -eq "Skype for Business Server 2019, Core Components").Version -lt "$SkypeForBusinessCUVer") 
+    $SfBPatchLevel = (Get-CsServerPatchVersion | where ComponentName -eq "Skype for Business Server 2019, Core Components" -ErrorAction "SilentlyContinue").Version
+    If (!($SfBPatchLevel))  {Throw "Unable to determine Skype for Business Server 2019 PatchLevel"}
+    If ($SfBPatchLevel -lt "$SkypeForBusinessCUVer") 
     {
-        Write-Host "Applying Skype for Business Server Cumulative Update." -ForegroundColor Green
+        Write-Host "Applying Skype for Business Server 2019 Cumulative Update." -ForegroundColor Green
         Test-FilePath ("$SkypeForBusinessCUPath\SkypeServerUpdateInstaller.exe")
         Stop-CsWindowsService
         $service = Get-Service | Where-Object {$_.Name -eq "w3svc"}
@@ -71,7 +73,7 @@ Function Update-SfB
     }
     Else 
     {
-        Write-Host "Skype for Business not installed; or Skype for Business Server 2019 Cumulative Updates are already applied." -Foregroundcolor Green
+        Write-Host "Skype for Business Server 2019 Cumulative Update already applied." -Foregroundcolor Green
     }
 }
 
@@ -79,7 +81,9 @@ Function Upgrade-SQLInstance ($SQLInstance)
 {
     Write-Verbose "----- Entering Upgrade-SQLInstance ($SQLInstance) function -----"
     
-    If ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$SQLInstance\MSSQLServer\CurrentVersion").CurrentVersion -lt "15.0.2000.5")
+    $SQLVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$SQLInstance\MSSQLServer\CurrentVersion").CurrentVersion
+    If (!($SQLVersion))  {Throw "Unable to determine SQL CurrentVersion for $SQLInstance"}
+    If ($SQLVersion -lt "15.0.2000.5") # SQL Server 2019 RTM
     {
         # Check pending reboot; potentially Restart-Computer in middle of MDT TS?
         If (Check-PendingReboot) {Write-Host "WARNING: Pending reboot on $env:COMPUTERNAME" -ForegroundColor Yellow}
@@ -89,10 +93,14 @@ Function Upgrade-SQLInstance ($SQLInstance)
         Stop-CsWindowsService
         $service = Get-Service | Where-Object {$_.Name -eq "w3svc"}
         If ($service.Status -eq "Running") {Stop-Service w3svc}
-        Start-Process "$SQLServer2019Path\SETUP.EXE" -Wait -Argumentlist " /qs /ACTION=Upgrade /IAcceptSQLServerLicenseTerms /INSTANCENAME=$SQLInstance /HIDECONSOLE /ERRORREPORTING=0"
-        Start-CsWindowsService
+        Start-Process "$SQLServer2019Path\SETUP.EXE" -Wait -Argumentlist " /QS /ACTION=Upgrade /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=$SQLInstance /HIDECONSOLE /ERRORREPORTING=0"
         $service = Get-Service | Where-Object {$_.Name -eq "w3svc"}
         If ($service.Status -eq "Stopped") {Start-Service w3svc}
+        Start-CsWindowsService
+    }
+    Else
+    {
+        Write-Host "SQL instance $SQLInstance already upgraded to SQL Server 2019" -Foregroundcolor Green
     }
 }
 
@@ -100,7 +108,9 @@ Function Update-SQLInstance ($SQLInstance)
 {
     Write-Verbose "----- Entering Update-SQLInstance ($SQLInstance) function -----"
     
-    If ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$SQLInstance\MSSQLServer\CurrentVersion").CurrentVersion -lt "$SQLServer2019CUVer")
+    $SQLPatchLevel = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.$SQLInstance\Setup" -ErrorAction "SilentlyContinue").PatchLevel
+    If (!($SQLPatchLevel))  {Throw "Unable to determine SQL PatchLevel for $SQLInstance"}
+    If ($SQLPatchLevel -lt "$SQLServer2019CUVer") 
     {
         # Check pending reboot; potentially Restart-Computer in middle of MDT TS?
         If (Check-PendingReboot) {Write-Host "WARNING: Pending reboot on $env:COMPUTERNAME" -ForegroundColor Yellow}
@@ -110,7 +120,7 @@ Function Update-SQLInstance ($SQLInstance)
         Stop-CsWindowsService
         $service = Get-Service | Where-Object {$_.Name -eq "w3svc"}
         If ($service.Status -eq "Running") {Stop-Service w3svc}
-        Start-Process "$SQLServer2019Path\SETUP.EXE" -Wait -Argumentlist " /qs /ACTION=Patch /IAcceptSQLServerLicenseTerms /AllInstances /ERRORREPORTING=0"
+        Start-Process "$SQLServer2019CU\SETUP.EXE" -Wait -Argumentlist " /QS /ACTION=Patch /IACCEPTSQLSERVERLICENSETERMS /ALLINSTANCES /ERRORREPORTING=0"
         $service = Get-Service | Where-Object {$_.Name -eq "w3svc"}
         If ($service.Status -eq "Stopped") {Start-Service w3svc}
         Start-CsWindowsService
@@ -137,12 +147,16 @@ Upgrade-SQLInstance ("RTC")
 Upgrade-SQLInstance ("RTCLOCAL")
 Upgrade-SQLInstance ("LYNCLOCAL")
 
-# Apply latest Cumulative Update (CU) to SQL Server 2019 instances (currently not working)
-#Update-SQLInstance ("RTC")
-#Update-SQLInstance ("RTCLOCAL")
-#Update-SQLInstance ("LYNCLOCAL")
-
 # Update firewall rule to reflect new SQL Server path
 Set-NetFirewallRule -DisplayName 'SQL RTC Access' -Program "C:\Program Files\Microsoft SQL Server\MSSQL15.RTC\MSSQL\Binn\sqlservr.exe" | Out-Null
+
+# should reboot server here
+
+# Apply latest Cumulative Update (CU) to SQL Server 2019 instances (currently not working)
+Update-SQLInstance ("RTC") # This will effectively patch all remaining instances
+Update-SQLInstance ("RTCLOCAL")
+Update-SQLInstance ("LYNCLOCAL")
+
+# should reboot server here
 
 Stop-Transcript
