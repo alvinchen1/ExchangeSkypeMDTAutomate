@@ -304,17 +304,30 @@ $TopoXML = @"
 # FUNCTIONS
 # =============================================================================
 
+Function Test-FilePath ($File)
+{
+    If (!(Test-Path -Path $File)) {Throw "ERROR: Unable to locate $File"} 
+}
+
+Function Check-PendingReboot
+{
+    If (!(Get-Module -ListAvailable -Name PendingReboot)) 
+    {
+        Test-FilePath ("$InstallShare\Install-PendingReboot\PendingReboot")
+        Copy-Item -Path "$InstallShare\Install-PendingReboot\PendingReboot" -Destination "C:\Program Files\WindowsPowerShell\Modules" -Recurse -Force
+    }
+
+    Import-Module PendingReboot
+    [bool] (Test-PendingReboot -SkipConfigurationManagerClientCheck).IsRebootPending
+}
+
 Function Set-SfB-CentralMgmtStore
 {
     Write-Verbose "----- Entering Set-SfB-CentralMgmtStore function -----"
     
     # Install CentralMgmtStore
-    If (!(Test-CsDatabase -CentralManagementDatabase))
-    {
-        Write-Host "Installing Central Management Store (CMS) - database" -ForegroundColor Green
-        Install-CsDatabase -CentralManagementDatabase -SqlServerFqdn "$SkypeFQDN" -SqlInstanceName Rtc -Report "$env:TEMP\Install-CsDatabase-RTC-$DTG.html"
-        Test-CsDatabase -CentralManagementDatabase
-    }
+    Write-Host "Installing Central Management Store (CMS) - database" -ForegroundColor Green
+    Install-CsDatabase -CentralManagementDatabase -SqlServerFqdn "$SkypeFQDN" -SqlInstanceName Rtc -Report "$env:TEMP\Install-CsDatabase-RTC-$DTG.html"
 
     # Set the Service Control Point for the CentralMgmtStore in AD
     If (!((Get-CsConfigurationStoreLocation).BackEndServer -eq "$SkypeFQDN\rtc"))
@@ -330,12 +343,17 @@ Function Set-SfB-Topology
     Write-Verbose "----- Entering Set-SfB-Topology function -----"
     
     # Publish and Enable Topology
-    If (!(Get-CsTopology))
+    If ((Get-CsTopology | Select-Object -ExpandProperty Sites).Name -ne $DomainName)
     {
         Write-Host "Publishing and Enabling Topology" -ForegroundColor Green
-        $TopoXML | Out-File "$env:TEMP\Publish-CsTopology-$DTG.xml" -Force
-        Publish-CsTopology -FileName "$env:TEMP\Publish-CsTopology-$DTG.xml" -Force -Report "$env:TEMP\Publish-CsTopology-$DTG.html"
+        $TopoXML | Out-File "$env:TEMP\CsTopology-$DTG.xml" -Force
+        Publish-CsTopology -FileName "$env:TEMP\CsTopology-$DTG.xml" -Force -Report "$env:TEMP\Publish-CsTopology-$DTG.html"
         Enable-CsTopology -Report "$env:TEMP\Enable-CsTopology-$DTG.html"
+    }
+    Else 
+    {
+        Write-Host "Topology already Published and Enabled" -ForegroundColor Green
+        Get-CsTopology
     }
 }
 
@@ -347,12 +365,9 @@ Function New-SfB-RTCLOCAL
     {
         Write-Host "Installing Local Configuration Store - SQL Express Instance" -ForegroundColor Green
         Test-FilePath ("C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe")
-        Test-FilePath ("$Skype4BusinessPath\Setup\amd64") 
         $FilePath = "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe"
         $Args = @(
-        '/Bootstraplocalmgmt'
-        '/SourceDirectory'
-        "$Skype4BusinessPath\Setup\amd64"
+        '/BootstrapLocalMgmt'
         )
         Start-Process -FilePath $FilePath -ArgumentList $Args -Wait  
     }
@@ -360,6 +375,52 @@ Function New-SfB-RTCLOCAL
     {
         Write-Host "Local Configuration Store - SQL Express Instance already exists." -ForegroundColor Green
     }
+}
+
+Function New-SfB-LYNCLOCAL
+{
+    Write-Verbose "----- Entering New-SfB-LYNCLOCAL function -----"
+    
+    If ((Get-Service | Where {$_.Name -eq 'MSSQL$LYNCLOCAL'}).count -eq 0) 
+    {
+        Write-Host "Installing LYNCLOCAL - SQL Express Instance" -ForegroundColor Green
+        
+        Test-FilePath ("$Skype4BusinessPath\Setup\amd64\SQLEXPR_x64.EXE")
+        Start-Process -FilePath "$Skype4BusinessPath\Setup\amd64\SQLEXPR_x64.EXE" -ArgumentList "/x:$env:TEMP\SQLEXPRADV_x64_ENU /q /S" -Wait
+        
+        Test-FilePath ("$env:TEMP\SQLEXPRADV_x64_ENU\SETUP.EXE")
+        $FilePath = "$env:TEMP\SQLEXPRADV_x64_ENU\SETUP.EXE"
+        $Args = @(
+        "/Q"
+        "/IACCEPTSQLSERVERLICENSETERMS"
+        "/UPDATEENABLED=0"
+        "/ERRORREPORTING=0"
+        "/ACTION=Install"
+        "/FEATURES=SQLEngine,Tools"
+        "/INSTANCENAME=LYNCLOCAL"
+        "/INSTANCEDIR=`"C:\Program Files\Microsoft SQL Server`""
+        "/ADDCURRENTUSERASSQLADMIN"
+        "/SQLSYSADMINACCOUNTS=`"BUILTIN\Administrators`""
+        "/SQLSVCACCOUNT=`"NT AUTHORITY\NETWORK SERVICE`""
+        "/SQLSVCSTARTUPTYPE=Automatic"
+        "/AGTSVCACCOUNT=`"NT AUTHORITY\NETWORK SERVICE`""
+        "/AGTSVCSTARTUPTYPE=Disabled"
+        "/BROWSERSVCSTARTUPTYPE=`"Automatic`""
+        "/TCPENABLED=1"
+        )
+        Start-Process -FilePath $FilePath -ArgumentList $Args -Wait
+    }
+    Else 
+    {
+        Write-Host "SQL Express Instance (LYNCLOCAL) already exists." -ForegroundColor Green
+    }
+}
+
+Function Set-SfB-ServerComponents
+{
+    Write-Verbose "----- Entering Set-SfB-ServerComponents function -----"
+
+    #Write-Host "Setting up Skype for Business Server 2019 Server Components" -ForegroundColor Green
 
     # Install Local Configuration Store (replica of CMS) within RTCLOCAL
     Write-Host "Installing Local Configuration Store - database" -ForegroundColor Green
@@ -378,25 +439,23 @@ Function New-SfB-RTCLOCAL
     Get-CsWindowsService Replica
 }
 
-Function New-SfB-LYNCLOCAL
+Function Install-SfB-Certs
 {
-    Write-Verbose "----- Entering New-SfB-LYNCLOCAL function -----"
+    Write-Verbose "----- Entering Install-SfB-Certs function -----"
     
-    If ((Get-Service | Where {$_.Name -eq 'MSSQL$LYNCLOCAL'}).count -eq 0) 
+    If (!(Test-SfB-Cert ("$CertTemplate"))) 
     {
-        Write-Host "Installing LYNCLOCAL - SQL Express Instance" -ForegroundColor Green
-        Test-FilePath ("C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe")
-        Test-FilePath ("$Skype4BusinessPath\Setup\amd64") 
-        $FilePath = "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe"
-        $Args = @(
-        '/SourceDirectory'
-        "$Skype4BusinessPath\Setup\amd64"
-        )
-        Start-Process -FilePath $FilePath -ArgumentList $Args -Wait  
+        Write-Host "Installing certificate derived from $CertTemplate template" -ForegroundColor Green
+        $Template = $CertTemplate.Replace(" ","")
+        $Certificate = Get-Certificate -Template $Template -DNSName $SkypeFQDN,dialin.$DomainDnsName,meet.$DomainDnsName,lyncdiscoverinternal.$DomainDnsName,lyncdiscover.$DomainDnsName,sip.$DomainDnsName -CertStoreLocation cert:\LocalMachine\My -subjectname cn=$SkypeFQDN
     }
-    Else 
+
+    If (Test-SfB-Cert ("$CertTemplate"))
     {
-        Write-Host "LYNCLOCAL - SQL Express Instance already exists." -ForegroundColor Green
+        Write-Host "Assigning certificates based on the defined Topology" -ForegroundColor Green
+        $InstalledCert = Get-ChildItem Cert:\LocalMachine\My | ? {$_.Extensions.format(1)[0] -match "Template=$CertTemplate"}
+        Set-CSCertificate -Type Default,WebServicesInternal,WebServicesExternal -Thumbprint $InstalledCert.Thumbprint -Confirm:$false -Report "$env:TEMP\Set-CSCertificate-$Template.html"
+        $InstalledCert | fl
     }
 }
 
@@ -463,7 +522,7 @@ Function Set-SfB-DNS
     $URL3 = New-CsSimpleUrlEntry -Url "https://admin.$DomainDnsName"
     $SimpleURL3 = New-CsSimpleUrl -Component "Cscp" -Domain "*" -SimpleUrlEntry $URL3 -ActiveUrl "https://admin.$DomainDnsName"
 
-    Remove-CsSimpleUrlConfiguration -Identity "Global"     
+    Remove-CsSimpleUrlConfiguration -Identity "Global"
     Set-CsSimpleUrlConfiguration -Identity "Global" -SimpleUrl @{Add=$SimpleURL1,$SimpleURL2,$SimpleURL3}
     Enable-CsComputer -Report "$env:TEMP\Enable-CsComputer-$DTG.html"
 }
@@ -508,6 +567,9 @@ Set-SfB-Topology
 # Install RTCLOCAL and LYNCLOCAL instances and databases
 New-SfB-RTCLOCAL
 New-SfB-LYNCLOCAL
+
+# Set up server components (this still needs work to match SfB Deployment Wizard GUI)
+Set-SfB-ServerComponents
 
 # Create CNAMEs in DNS
 Set-SfB-DNS

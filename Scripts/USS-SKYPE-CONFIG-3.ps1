@@ -79,7 +79,7 @@ Function Install-SfB-Core
     {
         Write-Host "Installing Skype for Business Server Core" -Foregroundcolor Green
         Test-FilePath ("$Skype4BusinessPath\Setup\amd64\setup.exe")
-        Start-Process "$Skype4BusinessPath\Setup\amd64\setup.exe" -Wait -Argumentlist "/bootstrapcore"
+        Start-Process "$Skype4BusinessPath\Setup\amd64\setup.exe" -Wait -Argumentlist "/BootstrapCore"
     }
     Else 
     {
@@ -203,8 +203,11 @@ Function Install-SfB-AdminTools
     Else 
     {
         Write-Host "Installing Skype for Business Server 2019, Administrative Tools" -Foregroundcolor Green
-        Test-FilePath ("$Skype4BusinessPath\Setup\amd64\Setup\admintools.msi")
-        Start-Process msiexec.exe -Wait -Argumentlist " /i $Skype4BusinessPath\Setup\amd64\Setup\admintools.msi /qn"
+        #Test-FilePath ("$Skype4BusinessPath\Setup\amd64\Setup\admintools.msi")
+        #Start-Process msiexec.exe -Wait -Argumentlist " /i $Skype4BusinessPath\Setup\amd64\Setup\admintools.msi /qn"
+
+        Test-FilePath ("C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe")
+        Start-Process "C:\Program Files\Skype for Business Server 2019\Deployment\Bootstrapper.exe" -Wait -Argumentlist "/BootstrapAdminTools"
     }
 }
 
