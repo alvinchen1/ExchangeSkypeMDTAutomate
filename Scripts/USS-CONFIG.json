@@ -1,0 +1,20 @@
+{
+    "DomainName" : "USS.LOCAL",
+    "NetBiosName" : "USS",
+    "DEFAULTGW" : "10.10.5.1",
+    "DNS1" : "10.10.5.11",
+    "DNS2" : "10.10.5.12",
+    "Servers" : {
+        "Admin" : { "Name" : "USS-PA-01",  "vSwitchIp" : "10.10.5.30", "VmFolderPath" : "C:\\VM_C" },
+        "DC1"   : { "Name" : "USS-SRV-11", "IP" : "10.10.5.11" },
+        "DC2"   : { "Name" : "USS-SRV-12", "IP" : "10.10.5.12" },
+        "DSC"   : { "Name" : "USS-SRV-13", "IP" : "10.10.5.13" },
+        "MECM"  : { "Name" : "USS-SRV-14", "IP" : "10.10.5.14" },
+        "DHCP"  : { "Name" : "USS-SRV-15", "IP" : "10.10.5.15" },
+        "WSUS"  : { "Name" : "USS-SRV-16", "IP" : "10.10.5.16" },
+        "CA"    : { "Name" : "USS-SRV-17", "IP" : "10.10.5.17" },
+        "RootCA": { "Name" : "USS-SRV-18", "IP" : "10.10.5.18" },
+        "Skype" : { "Name" : "USS-SRV-19", "IP" : "10.10.5.19" },
+        "DPM"   : { "Name" : "USS-SRV-20", "IP" : "10.10.5.20" }
+    }
+}

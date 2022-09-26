@@ -1,0 +1,43 @@
+Host
+- If installing on a VM, enable nested virtualization
+    Set-VMProcessor -VMName ClusterNode1 -ExposeVirtualizationExtensions $true
+- Simulate the multiple NICs by adding adapters from the host
+    Get-VM -Name ClusterNode1 | Add-VMNetworkAdapter -Name NIC2 -SwitchName "Internal(VMsAndHost)"
+- MacAddress spoofing must be turned on for each nested host so that network traffic can flow
+    - Look in the vswitch to see what adapter it's using
+    - Run Get-NetAdapter to find the mac address of used adapter
+    - On the host one level up, run Get-VMNetworkAdapter, find the mac from step 2
+    - Use the command below to set spoofing on
+    Get-VMNetworkAdapter -VMName AdminServer | Where-Object -Property Name -eq "CPU SLOT 6 PORT 1" | Set-VMNetworkAdapter -MacAddressSpoofing On
+    - Or just do this on the Host
+    Get-VMNetworkAdapter -all | Set-VMNetworkAdapter -MacAddressSpoofing on
+
+Cluster Machines and Admin Server
+- Set ip address and machine name on server
+- Run commands in ConfigureWinRm.ps1 to create cert and winrm connection
+Add-VMNetworkAdapter -VMName ClusterNode1 -SwitchName "Internal(VMsAndHost)" -Name NIC1
+Add-VMNetworkAdapter -VMName ClusterNode1 -SwitchName "Internal(VMsAndHost)" -Name NIC2
+Add-VMNetworkAdapter -VMName ClusterNode1 -SwitchName "Internal(VMsAndHost)" -Name NIC3
+Add-VMNetworkAdapter -VMName ClusterNode1 -SwitchName "Internal(VMsAndHost)" -Name NIC4
+Add-VMNetworkAdapter -VMName ClusterNode1 -SwitchName "Internal(VMsAndHost)" -Name "SLOT 2 PORT 1"
+Add-VMNetworkAdapter -VMName ClusterNode1 -SwitchName "Internal(VMsAndHost)" -Name "SLOT 2 PORT 2"
+
+
+Build Server
+- Added 10.10.5.* to trusted hosts on build machine
+    Set-Item WSMan:\localhost\Client\TrustedHosts "USS-*,10.10.5.*"
+-* The certificates may not be needed if we trust all hosts
+- Add certificates for all cluster nodes to trusted root store
+- Run service as local admin. Invoke-Command doesn't work at Network Service
+
+
+
+Origional config of ClusterNode2
+Name          IsManagementOs VMName       SwitchName           MacAddress   Status IPAddresses
+----          -------------- ------       ----------           ----------   ------ -----------
+NIC1          False          ClusterNode2 Internal(VMsAndHost) 00155D79F205 {Ok}   {10.10.5.32}
+NIC2          False          ClusterNode2 Internal(VMsAndHost) 00155D79F210 {Ok}   {169.254.232.145, fe80::d985:1181:239f:e891}
+NIC3          False          ClusterNode2 Internal(VMsAndHost) 00155D79F211 {Ok}   {169.254.224.168, fe80::44d0:dbb2:bf90:e0a8}
+NIC4          False          ClusterNode2 Internal(VMsAndHost) 00155D79F212 {Ok}   {169.254.182.209, fe80::3125:7440:c066:b6d1}
+SLOT 2 PORT 1 False          ClusterNode2 Internal(VMsAndHost) 00155D79F213 {Ok}   {169.254.229.248, fe80::4419:ee6c:f9d:e5f8}
+SLOT 2 PORT 2 False          ClusterNode2 Internal(VMsAndHost) 00155D79F214 {Ok}   {169.254.231.151, fe80::bdd2:540f:aae6:e797}
