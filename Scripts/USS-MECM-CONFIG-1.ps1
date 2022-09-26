@@ -50,6 +50,9 @@ $DNS2 = "10.1.102.51"
 $DEFAULTGW = "10.1.102.1"
 $PREFIXLEN = "24" # Set subnet mask /24, /25
 
+### ENTER MDT SERVER
+$MDTSERVER = "DEP-MDT-01"
+
 ### ENTER MDT STAGING FOLDER
 $MDTSTAGING = "\\DEP-MDT-01\STAGING"
 
@@ -87,6 +90,17 @@ Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $MECM_MGMT_IP -Addres
 ### Set the MGMT NIC DNS Addresses
 # Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses '10.1.102.50','10.1.102.51'
 Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2
+
+###################################################################################################
+# Server Ready
+#
+# This command writes a text file to a network share on the MDT server to notify other dependent servers
+# that they can continue their builds.
+# 
+# This notifies the WSUS server that the MECM computer object is in the domain. 
+# The WSUS Server uses the MECM computer object to grant permissions to folders and files.
+# 
+New-Item -Path \\$MDTSERVER\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME-READY.txt -Force
 
 ###################################################################################################
 ### COPY MECM CONFIGURATION FILE TO LOCAL DRIVE 

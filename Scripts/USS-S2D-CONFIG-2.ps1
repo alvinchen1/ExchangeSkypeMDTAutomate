@@ -34,6 +34,9 @@ $DEFAULTGW = "10.1.102.1"
 
 $PREFIXLEN = "24" # Set subnet mask /24, /25
 
+### ENTER MDT SERVER
+$MDTSERVER = "DEP-MDT-01"
+
 
 ###################################################################################################
 ### Create a HYPER-V VIRTUAL SWITCH/TEAM the NIC_VM NICs using Switch Embedded Teaming (SET)
@@ -156,6 +159,17 @@ Add-MpPreference -ExclusionProcess "$Env:systemroot\System32\Vmwp.exe" -Force
 # Add Defender file exclusion
 # Add-MpPreference -ExclusionPath "C:\test\file.exe" -Force
 
+
+###################################################################################################
+# Server Ready
+#
+# This command writes a text file to a network share on the MDT server to notify the last node in the cluster that
+# it ready to be Added to Cluster.
+
+# The USS-S2D-CONFIG-3.PS1 script will check for the existence of this file before creating the cluster.
+# This file tells the USS-S2D-CONFIG-3.PS1 script that this node has finished building.
+#
+New-Item -Path \\$MDTSERVER\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME-READY.txt -Force
 
 ###################################################################################################
 Stop-Transcript

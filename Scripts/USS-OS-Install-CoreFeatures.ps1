@@ -6,7 +6,7 @@ SYNOPSIS
     Installs core features on Windows Servers supporting the solution
 
 SYNTAX
-    .\$ScriptName -Server SERVERNAME
+    .\$ScriptName
  #>
 
 # Declare Variables
@@ -24,8 +24,10 @@ Start-Transcript -Path "$env:WINDIR\Temp\$env:COMPUTERNAME-$DTG-$ScriptName.log"
 If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile Exiting..."} 
 $XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
-$Features = $WS | ? {($_.Type -eq "Features") -and ($_.Name -ne "")}
-If ($Server.Length -eq 0) {$Server = $Env:COMPUTERNAME}
+$Server = $Env:COMPUTERNAME
+$Features = ($WS | ? {($_.Name -eq "$Server")}).Features.Split(",")
+$InstallShare = ($WS | ? {($_.Name -eq "InstallShare")}).Value
+$WS2019Source = "$InstallShare\W2019\sources\sxs"
 
 # =============================================================================
 # FUNCTIONS
@@ -44,6 +46,11 @@ Function Check-Role()
     return $windowsPrincipal.IsInRole($role)
 }
 
+Function Test-FilePath ($File)
+{
+    If (!(Test-Path -Path $File)) {Throw "ERROR: Unable to locate $File"} 
+}
+
 Function Check-Prereqs
 {
     Write-Verbose "----- Entering Check-Prereqs function -----"
@@ -51,14 +58,8 @@ Function Check-Prereqs
     # Ensure script is run elevated
     If (!(Check-Role)) {Throw "Script is NOT running elevated. Be sure the script runs under elevated conditions."}
     
-    # Verify target server matches XML
-    Write-Verbose "Verifying targeted server name matches XML configuration..."
-    $TargetServer = $Features | ? {($_.Name -eq $Server)}
-    Write-Verbose "TargetServer: $TargetServer"
-    If (!($TargetServer))
-    {
-        Throw "Unable to continue, target server name does not match actual server name"
-    }
+    # Ensure sources directory path is valid    
+    Test-FilePath ($WS2019Source)
 }
 
 Function Install-CoreComponents
@@ -78,24 +79,12 @@ Function Install-CoreComponents
     #Get-Service MapsBroker | Select-Object -Property Name, StartType, Status
 }
 
-Function Install-ServerFeatures
-{
-    Write-Verbose "----- Entering Install-Features function -----"
-    
-    $TargetServerFeatures = ($Features | ? {($_.Name -eq $Server)}).Value.Split(",")
-    #Install-WindowsFeature -Name $TargetServerFeatures -Source $SxSStore -IncludeManagementTools
-    Install-WindowsFeature -Name $TargetServerFeatures -IncludeManagementTools
-}
-
-
 # =============================================================================
 # MAIN ROUTINE
 # =============================================================================
 
 Check-Prereqs
 Install-CoreComponents
-Install-ServerFeatures
-
-#Restart-Computer
+Install-WindowsFeature -Name $Features -Source $WS2019Source -IncludeManagementTools
 
 Stop-Transcript

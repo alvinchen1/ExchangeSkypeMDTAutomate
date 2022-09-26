@@ -38,10 +38,13 @@ $MgmtNICName = "NIC_MGMT1_1GB"
 
 # Configure the MGMT NIC
 Write-Host -ForegroundColor Green "Configuring NIC(s)"
-Rename-NetAdapter –Name "Ethernet" –NewName "$MgmtNICName"
+If (Get-NetAdapter "Ethernet" -ErrorAction SilentlyContinue) {Rename-NetAdapter –Name "Ethernet" –NewName "$MgmtNICName"}
 Get-NetAdapter "$MgmtNICName" | Get-NetIPAddress -AddressFamily IPv4 | Remove-NetIPAddress -Confirm:$false
 Get-NetAdapter "$MgmtNICName" | New-NetIPAddress -IPAddress $MgmtIP -AddressFamily IPv4 -PrefixLength $PrefixLen -DefaultGateway $DefaultGW -Confirm:$false
-Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2
+$MgmtNICIP = (Get-NetAdapter "$MgmtNICName" | Get-NetIPAddress -AddressFamily IPv4).IPAddress
+If ($MgmtNICIP -eq $DNS1) {Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses "127.0.0.1",$DNS2}
+ElseIf ($MgmtNICIP -eq $DNS2) {Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses "127.0.0.1",$DNS1}
+Else {Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2}
 Disable-NetAdapterBinding "$MgmtNICName" -ComponentID ms_tcpip6
 
 Stop-Transcript

@@ -34,6 +34,39 @@ $CLUSTER_IP = "10.1.102.81"
 $STORNET_1 = "10.10.10.0/24"
 $STORNET_2 = "20.20.20.0/24"
 
+### ENTER MDT SERVER
+$MDTSERVER = "DEP-MDT-01"
+
+### ENTER LAST NODE TO BUILD BEFORE THE LAST NODE STARTS CLUSTER CONFIG.
+$DEPNODE = "USS-PV-01"
+
+
+### ENTER CLUSTER NETWORKS NAMES/SUBNETS
+$MGMTSUB = "10.1.102.*"
+$MGMTNAME = "MANAGEMENT"
+
+$LIVMIGSUB1 = "10.10.10.*"
+$LIVMIGNAME1 = "LIVMIG-CLUSTER1"
+
+$LIVMIGSUB2 = "20.20.20.*"
+$LIVMIGNAME2 = "LIVMIG-CLUSTER2"
+
+
+###################################################################################################
+# Check to see if Other nodes for the Cluster have finish building and are ready to be clustered
+#
+# Wait for other dependent cluster nodes to finish building.
+#
+$FileName = "\\$MDTSERVER\DEPLOY_SHARE_OFF$\LOGS\$DEPNODE-READY.txt"
+
+If (!(Test-Path $FileName)) {
+    
+    do {
+    Write-Host -foregroundcolor Yellow "Other Cluster Nodes Still Building...Sleeping for 20 Seconds..."
+    Start-Sleep 20
+    } until (Test-Path $FileName)
+} Write-Host -foregroundcolor green "Other Cluster Nodes are Ready...Continuing to Cluster Creation..."
+
 
 ###################################################################################################
 ############################ Test the Nodes to determine if there ready for the cluster
@@ -127,8 +160,6 @@ Invoke-Command ($ServerList) {
 # Enable-ClusterStorageSpacesDirect -Verbose
 Enable-ClusterStorageSpacesDirect -Confirm:$false
 
-
-
 # Get-ClusterS2D
 
 # Get-StoragePool
@@ -172,7 +203,6 @@ New-Volume -Size 31TB -FriendlyName "VM_VOL2" -FileSystem CSVFS_ReFS
 # Remove-VirtualDisk -FriendlyName VM_VOL2
 # Remove-VirtualDisk -FriendlyName ClusterPerformanceHistory
 
-
 ############################# Optionally enable the CSV cache #####################################
 # https://docs.microsoft.com/en-us/windows-server/storage/storage-spaces/deploy-storage-spaces-direct
 # You can optionally enable the cluster shared volume (CSV) cache to use system memory (RAM) as a write-through block-level cache of read operations
@@ -191,6 +221,63 @@ Write-Output "Setting the CSV cache..."
 
 $CSVCurrentCacheSize = (Get-Cluster $ClusterName).BlockCacheSize
 Write-Output "$ClusterName CSV cache size: $CSVCurrentCacheSize MB"
+
+###################################################################################################
+# SET CLUSTER NETWORK NAMES
+### Get the OLD Network Names
+Write-Host -foregroundcolor green "Setting Cluster Network Names..."
+$OMGMT = Get-ClusterNetwork | ?{$_.Address -like $MGMTSUB }| Select-Object name | ForEach-Object {$_.name}
+$OLIVMIG1 = Get-ClusterNetwork | ?{$_.Address -like $LIVMIGSUB1 }| Select-Object name | ForEach-Object {$_.name}
+$OLIVMIG2 = Get-ClusterNetwork | ?{$_.Address -like $LIVMIGSUB2 }| Select-Object name | ForEach-Object {$_.name}
+
+### Set the New Cluster Network Names
+(Get-ClusterNetwork -Name $OMGMT).Name = $MGMTNAME
+(Get-ClusterNetwork -Name $OLIVMIG1).Name = $LIVMIGNAME1
+(Get-ClusterNetwork -Name $OLIVMIG2).Name = $LIVMIGNAME2
+
+
+###################################################################################################
+# Set Cluster Network Netork Communication
+# What the default output doesn't show you is the property called Role. 
+# This is the property that controls the options listed in the GUI, and it can have one of three possible
+# 
+# Integer Values:
+#  - 1: Allow cluster network communication on this network
+#  - 3: Allow clients to connect through this network
+#  - 0: Do not allow cluster network communication on this network
+
+# To allow cluster network communication, but not client connections:
+# $MyNetwork = Get-ClusterNetwork "MyHeartbeatNetwork"
+# $MyNetwork.Role = 1
+#
+# Only allow Cluster traffic/communication on these networks.
+Write-Host -foregroundcolor green "Setting Cluster Network Roles/Communications..."
+$NETLIVMIG1 = Get-ClusterNetwork "$LIVMIGNAME1"
+$NETLIVMIG1.Role = 1
+
+$NETLIVMIG2 = Get-ClusterNetwork "$LIVMIGNAME2"
+$NETLIVMIG2.Role = 1
+
+###################################################################################################
+# Setup Live Migration Networks
+#
+### Change the Network Orders in "Live Migration Settings"
+#
+# https://aidanfinn.com/?p=12724
+# Get-ClusterResourceType -Name “Virtual Machine” | Set-ClusterParameter -Name MigrationNetworkOrder -Value ([String]::Join(“;”,(Get-ClusterNetwork -Name “Network1”).ID,(Get-ClusterNetwork -Name “Network2”).ID,(Get-ClusterNetwork -Name “Network3”).ID))
+#
+# The following command sets the Cluster Network Order to use the $LIVMIGNAME1 network then the $LIVMIGNAME2 network...confirm this in Live Migration Settings in FCM.
+Write-Host -foregroundcolor green "Changing the Cluster Network Order..."
+Get-ClusterResourceType -Name “Virtual Machine” | Set-ClusterParameter -Name MigrationNetworkOrder -Value ([String]::Join(“;”,(Get-ClusterNetwork -Name $LIVMIGNAME1).ID,(Get-ClusterNetwork -Name $LIVMIGNAME2).ID))
+
+# Disable all but one network adapter using powershell for LM:
+# Get-ClusterResourceType -Name “Virtual Machine” | Set-ClusterParameter -Name MigrationExcludeNetworks -Value ([String]::Join(“;”,(Get-ClusterNetwork | Where-Object {$_.Name -ne “Live Migration”}).ID))
+# Get-ClusterResourceType -Name “Virtual Machine” | Set-ClusterParameter -Name MigrationExcludeNetworks -Value ([String]::Join(“;”,(Get-ClusterNetwork | Where-Object {$_.Name -ne $LIVMIGNAME1}).ID))
+
+# Exclude a Specific Cluster Network from "Live Migration Settings" in FCM.
+# The following command excludes the $MGMTNAME network from "Live Migration Settings" in FCM.
+Write-Host -foregroundcolor green "Excluding Management Network from Live Migration and Cluster Traffic..."
+Get-ClusterResourceType -Name “Virtual Machine” | Set-ClusterParameter -Name MigrationExcludeNetworks -Value ([String]::Join(“;”,(Get-ClusterNetwork | Where-Object {$_.Name -eq $MGMTNAME}).ID))
 
 
 ###################################################################################################

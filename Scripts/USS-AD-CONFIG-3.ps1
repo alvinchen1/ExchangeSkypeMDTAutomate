@@ -1,6 +1,6 @@
 ﻿<#
 NAME
-    USS-AD-CONFIG-3.ps1
+    AD-CONFIG-3.ps1
 
 SYNOPSIS
     Creates OUs, service accounts, and security groups in AD for the solution
@@ -15,9 +15,17 @@ $ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
 $ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
 $DTG = Get-Date -Format yyyyMMddTHHmm
 $RootDir = Split-Path $ScriptDir –Parent
+$ConfigFile = "$RootDir\config.xml"
 
 Start-Transcript -Path "$RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log"
 Start-Transcript -Path "$env:WINDIR\Temp\$env:COMPUTERNAME-$DTG-$ScriptName.log"
+
+# Load variables from config.xml
+If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile Exiting..."} 
+$XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
+$PKI = ($XML.Component | ? {($_.Name -eq "PKI")}).Settings.Configuration
+$RootCACred = ($PKI | ? {($_.Name -eq "RootCACred")}).Value
+$DEFPASS = ConvertTo-SecureString -AsPlainText -Force -String $RootCACred
 
 Import-Module ActiveDirectory
 Import-Module GroupPolicy
@@ -81,8 +89,6 @@ Function Set-ADConfig
 
     # --------------- Create Service Accounts ---------------
     Write-Host -foregroundcolor green "Provisioning Service Accounts"
-
-    $DEFPASS = (ConvertTo-SecureString -String !QAZ2wsx#EDC4rfv -AsPlainText -Force)
 
     # SQL
     If (!(Test-ADObject ("CN=SVC-CM-SQL01,OU=MECM,OU=T0-Service Accounts,OU=Tier 0,OU=Admin,$DomainDN"))) 

@@ -40,22 +40,46 @@ $SCCMCONTENT = "USS-SRV-54$"
 $MECMSRV = "USS-SRV-52$"
 $SCCMFOLDER = "D:\SCCMSHARE"
 
+### ENTER MDT SERVER
+$MDTSERVER = "DEP-MDT-01"
+
+### ENTER MECM SERVER
+$MECMSERVER = "USS-SRV-52"
+
 ### ENTER WSUS CONTENT Drive.
 $WSUS_CONT_DRV = "E:\WSUS"
 
 ### ENTER SCCM STAGING FOLDER
 $MDTSTAGING = "\\DEP-MDT-01\STAGING"
 
+
+###################################################################################################
+# Check to see if Dependent Server have finish building.
+#
+# Wait for MECM computer object in AD. Needed to set folder permissions below.
+#
+$FileName = "\\$MDTSERVER\DEPLOY_SHARE_OFF$\LOGS\$MECMSERVER-READY.txt"
+
+If (!(Test-Path $FileName)) {
+    
+    do {
+    Write-Host -foregroundcolor Yellow "MECM Server Still Building...Sleeping for 20 Seconds..."
+    Start-Sleep 20
+    } until (Test-Path $FileName)
+} Write-Host -foregroundcolor green "MECM Server Ready...Continuing Process this Script..."
+
+
 ### Create the WSUS IMPORT folder #################################################################
 # Write-Host -foregroundcolor green "Creating the WSUS IMPORT folder..."
 # New-Item D:\WSUSImports –Type Directory
 
 
-### COPY WSUS FOLDER TO LOCAL DRIVE ###########################################################################
+### COPY WSUS/SCCMSHARE FOLDER TO LOCAL DRIVE ###########################################################################
 #
 Write-Host -foregroundcolor green "Copying WSUS/SCCMShare folders to D:\ and E:\"
 Copy-Item C:\WSUS_STAGING\WSUSImports -Destination D:\ -Recurse
 Copy-Item $MDTSTAGING\SCCMShare -Destination D:\ -Recurse
+
 
 ########################### Finish WSUS Install and Configuation ##################################
 # & ‘C:\Program Files\Update Services\Tools\WsusUtil.exe’ postinstall content_dir=D:\WSUS
@@ -90,8 +114,8 @@ Set-WebConfiguration "/system.applicationHost/applicationPools/add[@name='WsusPo
 ### COPY WSUS CONTENT FOLDER TO WSUSCONTENT FOLDER ###########################################################################
 #
 Write-Host -foregroundcolor green "Copying WSUSContent folders to E:\WSUS\WSUSContent"
-Copy-Item C:\WSUS_STAGING\WSUSImports\WsusContent\* -Destination E:\WSUS\WsusContent -Recurse
-
+# Copy-Item C:\WSUS_STAGING\WSUSImports\WsusContent\* -Destination E:\WSUS\WsusContent -Recurse
+Copy-Item $MDTSTAGING\WsusContent\* -Destination E:\WSUS\WsusContent -Recurse
 
 ###################################################################################################
 ############# Create the SCCM Share Folders #######################################################

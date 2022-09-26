@@ -3,7 +3,8 @@ NAME
     SKYPE-CONFIG-5.ps1
 
 SYNOPSIS
-    Applies latest Cumulative Update to Skype for Business 2019
+    Upgrades SQL Express 2016 to 2019 and applies latest SQL CU in support of SfB
+    (requires reboot after each SQL instance)
 
 SYNTAX
     .\$ScriptName
@@ -25,8 +26,9 @@ If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile 
 $XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
 $InstallShare = ($WS | ? {($_.Name -eq "InstallShare")}).Value
-$SkypeForBusinessCUPath = "$InstallShare\Skype4BusinessCU"
-$SkypeForBusinessCUVer = "7.0.2046.404" # See https://docs.microsoft.com/en-us/skypeforbusiness/sfb-server-updates
+$SQLServer2019Path = "$InstallShare\SQLServer2019"
+$SQLServer2019CU = "$InstallShare\SQLServer2019\CU"
+$SQLServer2019CUVer = "15.0.4249.2" # Patched SQL version with CU; see https://support.microsoft.com/help/4518398
  
 # =============================================================================
 # FUNCTIONS
@@ -49,29 +51,58 @@ Function Check-PendingReboot
     [bool] (Test-PendingReboot -SkipConfigurationManagerClientCheck).IsRebootPending
 }
 
-Function Update-SfB
+Function Upgrade-SQLInstance ($SQLInstance)
 {
-    Write-Verbose "----- Entering Update-SfB function -----"
+    Write-Verbose "----- Entering Upgrade-SQLInstance ($SQLInstance) function -----"
     
-    $SfBPatchLevel = (Get-CsServerPatchVersion | where ComponentName -eq "Skype for Business Server 2019, Core Components" -ErrorAction "SilentlyContinue").Version
-    If (!($SfBPatchLevel))  {Throw "Unable to determine Skype for Business Server 2019 PatchLevel"}
-    If ($SfBPatchLevel -lt "$SkypeForBusinessCUVer") 
+    $SQLVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$SQLInstance\MSSQLServer\CurrentVersion").CurrentVersion
+    If (!($SQLVersion))  {Throw "Unable to determine SQL CurrentVersion for $SQLInstance"}
+    If ($SQLVersion -lt "$SQLServer2019CUVer") # SQL Server 2019 RTM
     {
-        Write-Host "Applying Skype for Business Server 2019 Cumulative Update." -ForegroundColor Green
-        Import-Module "C:\Program Files\Common Files\Skype for Business Server 2019\Modules\SkypeForBusiness\SkypeForBusiness.psd1"
-        Test-FilePath ("$SkypeForBusinessCUPath\SkypeServerUpdateInstaller.exe")
+        If (Check-PendingReboot) {Write-Host "WARNING: Pending reboot on $env:COMPUTERNAME" -ForegroundColor Yellow}
+        Write-Host "Upgrading SQL instance $SQLInstance to SQL Server 2019" -Foregroundcolor Green
+        Test-FilePath ("$SQLServer2019Path\Express\SETUP.EXE")
         Stop-CsWindowsService
         $service = Get-Service | Where-Object {$_.Name -eq "w3svc"}
         If ($service.Status -eq "Running") {Stop-Service w3svc}
-        Start-Process "$SkypeForBusinessCUPath\SkypeServerUpdateInstaller.exe" -Wait -Argumentlist "/silentmode"
-        Start-CsWindowsService
-        $service = Get-Service | Where-Object {$_.Name -eq "w3svc"}
-        If ($service.Status -eq "Stopped") {Start-Service w3svc}
-        Install-CsDatabase -Update -LocalDatabases
+ 
+        $FilePath = "$SQLServer2019Path\Express\SETUP.EXE"
+        $Args = @(
+        "/QS"
+        "/IACCEPTSQLSERVERLICENSETERMS"
+        "/ERRORREPORTING=0"
+        "/ACTION=Upgrade"
+        "/INSTANCENAME=`"$SQLInstance`""
+        "/UPDATEENABLED=True"
+        "/UpdateSource=`"$SQLServer2019Path`""
+        )
+        Start-Process -FilePath $FilePath -ArgumentList $Args -Wait
     }
-    Else 
+    Else
     {
-        Write-Host "Skype for Business Server 2019 Cumulative Update already applied." -Foregroundcolor Green
+        Write-Host "SQL instance $SQLInstance already upgraded to SQL Server 2019" -Foregroundcolor Green
+    }
+}
+
+Function Update-SQLInstance ($SQLInstance)
+{
+    Write-Verbose "----- Entering Update-SQLInstance ($SQLInstance) function -----"
+
+    $SQLPatchLevel = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.$SQLInstance\Setup" -ErrorAction "SilentlyContinue").PatchLevel
+    If (!($SQLPatchLevel))  {Throw "Unable to determine SQL PatchLevel for $SQLInstance"}
+    If ($SQLPatchLevel -lt "$SQLServer2019CUVer") 
+    {
+        If (Check-PendingReboot) {Write-Host "WARNING: Pending reboot on $env:COMPUTERNAME" -ForegroundColor Yellow}
+        Write-Host "Applying CU ($SQLServer2019CUVer) to SQL Server 2019 instance $SQLInstance" -Foregroundcolor Green
+        Test-FilePath ("$SQLServer2019CU\SETUP.EXE")
+        Stop-CsWindowsService
+        $service = Get-Service | Where-Object {$_.Name -eq "w3svc"}
+        If ($service.Status -eq "Running") {Stop-Service w3svc}
+        Start-Process "$SQLServer2019CU\SETUP.EXE" -Wait -Argumentlist " /QS /ACTION=Patch /IACCEPTSQLSERVERLICENSETERMS /ALLINSTANCES /ERRORREPORTING=0"
+    }
+    Else
+    {
+        Write-Host "SQL Server 2019 CU ($SQLServer2019CUVer) already applied to instance $SQLInstance" -Foregroundcolor Green
     }
 }
 
@@ -82,7 +113,12 @@ Function Update-SfB
 # Check pending reboot
 If (Check-PendingReboot) {Write-Host "WARNING: Pending reboot on $env:COMPUTERNAME" -ForegroundColor Yellow}
 
-# Apply Skype for Business Server Cumulative Update
-Update-SfB
+# Upgrade SQL Server 2016 instances to SQL Server 2019 and apply latest CU to instance (reboots required)
+Upgrade-SQLInstance ("RTC")
+#Upgrade-SQLInstance ("RTCLOCAL")
+#Upgrade-SQLInstance ("LYNCLOCAL")
+
+# Update firewall rule(s) to reflect new SQL Server path
+Set-NetFirewallRule -DisplayName 'SQL RTC Access' -Program "C:\Program Files\Microsoft SQL Server\MSSQL15.RTC\MSSQL\Binn\sqlservr.exe" | Out-Null
 
 Stop-Transcript

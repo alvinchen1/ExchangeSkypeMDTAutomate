@@ -11,20 +11,20 @@
 		<Configuration Name="DomainName" Value="USS"/>
 		<Configuration Name="DomainDnsName" Value="USS.LOCAL"/>
 		<Configuration Name="DomainDistinguishedName" Value="DC=USS,DC=LOCAL"/>
-		<Configuration Name="SxSStore" Value="source\WS2019\Sources\SxS"/>
-		<Configuration Name="USS-SRV-50" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="USS-SRV-51" Type="Features" Value="AD-Domain-Services,DNS,RSAT-ADCS,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="USS-SRV-54" Type="Features" Value="BitLocker,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="USS-SRV-55" Type="Features" Value="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="USS-SRV-56" Type="Features" Value="ADCS-Cert-Authority,RSAT-AD-PowerShell,GPMC,BitLocker,SNMP-Service,SNMP-WMI-Provider"/>		
+		<Configuration Name="DefaultGateway" Value="10.1.102.1"/>
+		<Configuration Name="SubnetMaskBitLength" Value="24"/>
+		<Configuration Name="USS-SRV-50" Value="10.1.102.50" Role="DC1" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,AD-Domain-Services,DNS,RSAT-ADCS,NPAS"/>
+		<Configuration Name="USS-SRV-51" Value="10.1.102.51" Role="DC2" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,AD-Domain-Services,DNS,RSAT-ADCS,NPAS"/>
+		<Configuration Name="USS-SRV-54" Value="10.1.102.54" Role="WSUSCDP" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert"/>
+		<Configuration Name="USS-SRV-55" Value="10.1.102.55" Role="IssuingCA" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,ADCS-Cert-Authority,RSAT-AD-PowerShell,GPMC"/>
+		<Configuration Name="USS-SRV-56" Value="10.1.102.56" Role="RootCA" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-57" Value="10.1.102.57" Role="Skype" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="SAT-SRV-59" Value="10.1.102.59" Role="Exchange" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,Server-Media-Foundation,NET-Framework-45-Features,RPC-over-HTTP-proxy,RSAT-Clustering,RSAT-Clustering-CmdInterface,RSAT-Clustering-Mgmt,RSAT-Clustering-PowerShell,WAS-Process-Model,Web-Asp-Net45,Web-Basic-Auth,Web-Client-Auth,Web-Digest-Auth,Web-Dir-Browsing,Web-Dyn-Compression,Web-Http-Errors,Web-Http-Logging,Web-Http-Redirect,Web-Http-Tracing,Web-ISAPI-Ext,Web-ISAPI-Filter,Web-Lgcy-Mgmt-Console,Web-Metabase,Web-Mgmt-Console,Web-Mgmt-Service,Web-Net-Ext45,Web-Request-Monitor,Web-Server,Web-Stat-Compression,Web-Static-Content,Web-Windows-Auth,Web-WMI,Windows-Identity-Foundation,RSAT-ADDS,RSAT-AD-PowerShell,GPMC,RSAT-DNS-Server"/>
 	</Settings>
   </Component>
   <Component Name="PKI">
 	<Settings>
-		<Configuration Name="RootCA" Value="USS-SRV-55"/>
 		<Configuration Name="RootCACred" Value="!QAZ2wsx#EDC4rfv"/>
-		<Configuration Name="CDP" Value="USS-SRV-54"/>
-		<Configuration Name="IssuingCA" Value="USS-SRV-56"/>
 	</Settings>
   </Component>
   <Component Name="Exchange">

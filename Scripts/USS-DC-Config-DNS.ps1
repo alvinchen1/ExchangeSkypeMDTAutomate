@@ -25,8 +25,7 @@ If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile 
 $XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
 $DomainDnsName = ($WS | ? {($_.Name -eq "DomainDnsName")}).Value
-$PKI = ($XML.Component | ? {($_.Name -eq "PKI")}).Settings.Configuration
-$CDP = ($PKI | ? {($_.Name -eq "CDP")}).Value
+$CDP = ($WS | ? {($_.Role -eq "WSUSCDP")}).Name
 $CDPFQDN = $CDP + '.' + $DomainDnsName
 
 # =============================================================================

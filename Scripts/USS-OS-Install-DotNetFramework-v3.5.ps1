@@ -55,7 +55,7 @@ Function Install-DotNetFramework-v3.5
     If ((Get-WindowsFeature -Name NET-Framework-Core).InstallState -eq "Removed")
     {
         Write-Host "Installing Microsoft .NET Framework v3.5"
-        Install-WindowsFeature -Name NET-Framework-Core -Source "$WS2019Source"
+        Start-Process "dism.exe" -Wait -Argumentlist " /Online /Enable-Feature /FeatureName:netFX3 /All /LimitAccess /source:$WS2019Source"
     }
     Else
     {

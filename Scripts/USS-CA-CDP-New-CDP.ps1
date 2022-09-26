@@ -9,6 +9,7 @@ SYNTAX
     .\$ScriptName
  #>
 
+
 # Declare Variables
 # -----------------------------------------------------------------------------
 $ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
@@ -25,16 +26,13 @@ If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile 
 $XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
 $DomainName = ($WS | ? {($_.Name -eq "DomainName")}).Value
-$PKI = ($XML.Component | ? {($_.Name -eq "PKI")}).Settings.Configuration
-$IssuingCA = ($PKI | ? {($_.Name -eq "IssuingCA")}).Value
 $PkiFolder ="C:\inetpub\PKI"
 $CrlFolder = "$PkiFolder\crl"
 $CpFolder = "$PkiFolder\cp"
-$CAAccountName = "$DomainName\$IssuingCA$"
 
 $CAStatementContent = @"
 This is our CA Policy File
-"@    
+"@
 
 # =============================================================================
 # FUNCTIONS
@@ -96,5 +94,8 @@ Write-Host "`nTesting http://pki/cp"
 
 Write-Host "`nTesting http://pki/crl"
 (Invoke-WebRequest http://pki/crl -UseBasicParsing).StatusDescription
+
+# Server Ready: Writes a text file to MDT Deployment Share notifying dependent servers that they can continue their builds
+New-Item -Path "$RootDir\LOGS\$env:COMPUTERNAME-READY.txt" -Force
 
 Stop-Transcript

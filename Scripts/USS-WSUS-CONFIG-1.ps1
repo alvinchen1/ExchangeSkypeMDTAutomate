@@ -70,7 +70,6 @@ Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $WSUSSRV_MGMT_IP -Add
 # Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses '10.10.4.50','10.10.4.51'
 Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2
 
-
 ### COPY WSUS STAGING FOLDER TO LOCAL DRIVE ###########################################################################
 # Copy the WSUS_STAGING folder to the MDT STAGING folder:
 # Copy-Item '\\BBB-SC-01\d$\WSUS_STAGING' -Destination D:\STAGING -Recurse
@@ -104,7 +103,7 @@ Dism /online /enable-feature /featurename:NetFx3 /All /Source:C:\WSUS_STAGING\W2
 # Start-Process msiexec -Wait -ArgumentList '/I C:\WSUS_STAGING\REPORT_VIEWER_2012\SQLSysCLRTypes.msi /passive /norestart'
 # Start-Process msiexec -Wait -ArgumentList '/I C:\WSUS_STAGING\REPORT_VIEWER_2012\ReportViewer.msi /passive /norestart'
 # Install Microsoft System CLR Types for Microsoft SQL Server 2012
-Write-Host -foregroundcolor green "Install Microsoft System CLR Types"
+# Write-Host -foregroundcolor green "Install Microsoft System CLR Types"
 
 # Install Microsoft System CLR Types for Microsoft SQL Server 2012
 Write-Host -foregroundcolor green "Install Microsoft System CLR Types..."

@@ -1,91 +1,53 @@
-﻿##################### USS-AD-CONFIG-1.ps1 ############################################
+﻿<#
+NAME
+    Config-OS.ps1
 
-### This script is designed to work with MDT.
-### MDT will handle Reboots.
-#
-### This script will:
-#
-# -Rename the NICs.
-# -Remove IP Address from MGMT NIC
-# -Configure MGMT NICs
-# -Set the MGMT NIC DNS Addresses
-# -Add RSAT-AD-Tools (Windows Features) to support Active Directory forest
+SYNOPSIS
+    Configures network adapter(s) and hard drive(s)
 
+SYNTAX
+    .\$ScriptName
+ #>
 
-###################################################################################################
-### Start-Transcript
-# Stop-Transcript
-# Overwrite existing log.
-Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-AD-CONFIG-1.log
-Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-AD-CONFIG-1.log
+# Declare Variables
+# -----------------------------------------------------------------------------
+$ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
+$ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
+$DTG = Get-Date -Format yyyyMMddTHHmm
+$RootDir = Split-Path $ScriptDir –Parent
+$ConfigFile = "$RootDir\config.xml"
 
-###################################################################################################
-# MODIFY/ENTER These Values
-#
-### ENTER domain controller host names.
-# MDT will set host name in OS
-$DC1 = "USS-SRV-50"
-$DC2 = "USS-SRV-51"
+Start-Transcript -Path "$RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log"
+Start-Transcript -Path "$env:WINDIR\Temp\$env:COMPUTERNAME-$DTG-$ScriptName.log"
 
-### ENTER MGMT NIC IP Addresses
-$DC1_MGMT_IP = "10.1.102.50"
-$DC2_MGMT_IP = "10.1.102.51"
+# Load variables from config.xml
+If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile Exiting..."} 
+$XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
+$WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
+$Server = $Env:COMPUTERNAME
+$MgmtIP = ($WS | ? {($_.Name -eq "$Server")}).Value
+$DNS1 = ($WS | ? {($_.Role -eq "DC1")}).Value
+$DNS2 = ($WS | ? {($_.Role -eq "DC2")}).Value
+$DefaultGW = ($WS | ? {($_.Name -eq "DefaultGateway")}).Value
+$PrefixLen = ($WS | ? {($_.Name -eq "SubnetMaskBitLength")}).Value
+$MgmtNICName = "NIC_MGMT1_1GB"
 
-$DNS1 = "10.1.102.50"
-$DNS2 = "10.1.102.51"
-$DEFAULTGW = "10.1.102.1"
-$PREFIXLEN = "24" # Set subnet mask /24, /25
+# =============================================================================
+# MAIN ROUTINE
+# =============================================================================
 
+# Configure the MGMT NIC
+Write-Host -ForegroundColor Green "Configuring NIC(s)"
+If (Get-NetAdapter "Ethernet" -ErrorAction SilentlyContinue) {Rename-NetAdapter –Name "Ethernet" –NewName "$MgmtNICName"}
+Get-NetAdapter "$MgmtNICName" | Get-NetIPAddress -AddressFamily IPv4 | Remove-NetIPAddress -Confirm:$false
+Get-NetAdapter "$MgmtNICName" | New-NetIPAddress -IPAddress $MgmtIP -AddressFamily IPv4 -PrefixLength $PrefixLen -DefaultGateway $DefaultGW -Confirm:$false
+$MgmtNICIP = (Get-NetAdapter "$MgmtNICName" | Get-NetIPAddress -AddressFamily IPv4).IPAddress
+If ($MgmtNICIP -eq $DNS1) {Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses "127.0.0.1",$DNS2}
+ElseIf ($MgmtNICIP -eq $DNS2) {Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses "127.0.0.1",$DNS1}
+Else {Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2}
+Disable-NetAdapterBinding "$MgmtNICName" -ComponentID ms_tcpip6
 
-###################################################################################################
-### Rename the NICs
-#
-Rename-NetAdapter –Name “Ethernet” –NewName “NIC_MGMT1_1GB”
+# Add RSAT-AD-Tools to support Active Directory forest
+Add-WindowsFeature "RSAT-AD-Tools"
 
-
-### Get host name
-$HOSTNAME = HOSTNAME
-
-### Prepare MGMT NICs for New IP Address ##########################################################
-# Remove IP Address from MGMT NIC.
-Get-netadapter NIC_MGMT1_1GB | get-netipaddress –addressfamily ipv4 | remove-netipaddress -Confirm:$false
-
-
-### Configure MGMT NICs ###############################################################
-If($HOSTNAME -eq $DC1){
-### Set the MGMT NICs IP Addresses 
-# Host (USS-SRV-50)
-# write-host("Host Name is USS-SRV-50")
-#
-# Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $DC1_MGMT_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
-Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $DC1_MGMT_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
-
-}
-
-If($HOSTNAME -eq $DC2){
-### Set the MGMT NICs IP Addresses 
-# Host (USS-SRV-51)
-# write-host("Host Name is USS-SRV-51")
-#
-# Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $DC1_MGMT_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
-Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $DC2_MGMT_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
-
-}
-
-
-### Set the MGMT NIC DNS Addresses
-# Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses '10.1.102.50','10.1.102.51'
-Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2
-
-# Add RSAT-AD-Tools (Windows Features) to support Active Directory forest
-$featureLogPath = “C:\poshlog\featurelog.txt”
-New-Item $featureLogPath -ItemType file -Force
-$addsTools = “RSAT-AD-Tools”
-Add-WindowsFeature $addsTools
-Get-WindowsFeature | Where installed >>$featureLogPath
-
-###################################################################################################
 Stop-Transcript
-
-######################################### REBOOT SERVER ###########################################
-# Restart-Computer

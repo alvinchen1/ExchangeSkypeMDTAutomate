@@ -30,7 +30,6 @@ $ExchangeMailURL = ($Exchange | ? {($_.Name -eq "ExchangeMailURL")}).Value
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
 $DomainDnsName = ($WS | ? {($_.Name -eq "DomainDnsName")}).Value 
 $InstallShare = ($WS | ? {($_.Name -eq "InstallShare")}).Value
-$DOTNETFRAMEWORKPath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\DOTNETFRAMEWORK_4.8"
 $ExchangePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Exchange"
 $CertTemplate = ($WS | ? {($_.Name -eq "DomainName")}).Value + "WebServer"
 $OWAVirtualDirectory = "https://" + $ExchangeMailURL + "/owa"
@@ -41,25 +40,9 @@ $ActiveSyncVirtualDirectory = "https://" + $ExchangeMailURL + "/Microsoft-Server
 $WebServicesVirtualDirectory = "https://" + $ExchangeMailURL + "/EWS/Exchange.asmx"
 $GPOZipFileExch = "$InstallShare\Import-GPOs\Exchange.zip"
 $LocalDir = "C:\temp\ExchGPO\$DTG"
-$CDPFQDN = $CDP + '.' + $DomainDnsName
 
 Import-Module ActiveDirectory
 $LDAPDomain = (Get-ADRootDSE).defaultNamingContext
-
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-###
-###    Alvin Chen
-###    Install Exchange 2019
-###    Prerequisites, a file share, AD joined, IP addressed, Schema Admins, Enterprise Admins, Exchange Drive, all variables above set, 
-###         DNS name resolution for ExchangeMailURL
-###
-###    Prerequisties as of 7/15/2022
-###         https://docs.microsoft.com/en-us/exchange/plan-and-deploy/prerequisites?view=exchserver-2019
-###
-###     Known post steps as of 8/10/2022
-###         Add product key Set-ExchangeServer <ServerName> -ProductKey <ProductKey>
-###------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-clear-host
 
 # =============================================================================
 # FUNCTIONS
@@ -124,7 +107,6 @@ Function Set-XADSchema
     }
     Else 
     {
-        $ADSchemaLocation = 'AD:\CN=Schema,CN=Configuration,'+$LDAPDomain
         $ExchangeSchemaLocation = 'AD:\CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,'+$LDAPDomain
         $ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
         If ($ADSchema.rangeUpper -lt '16999') 
@@ -153,7 +135,6 @@ Function Set-XADPrep
     }
     Else
     {
-        $ADSchemaLocation = 'AD:\CN=Schema,CN=Configuration,'+$LDAPDomain
         $ExchangeSchemaLocation = 'AD:\CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,'+$LDAPDomain
         $ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
         If ($ADSchema.rangeUpper -lt '16999') 
@@ -178,6 +159,11 @@ Function Import-GPOs
 {
     Write-Verbose "----- Entering Import-GPOs function -----"
 
+    # Create OU
+    If (!(Test-ADObject ("OU=Exchange,OU=T0-Servers,OU=Tier 0,OU=Admin,$LDAPDomain"))) 
+    {New-ADOrganizationalUnit -Name "Exchange" -Path "OU=T0-Servers,OU=Tier 0,OU=Admin,$LDAPDomain"}
+
+    # Import GPO(s)
     Test-FilePath ($GPOZipFileExch)
     Expand-Archive -LiteralPath $GPOZipFileExch -DestinationPath $LocalDir -Force
     cd $LocalDir
@@ -198,13 +184,17 @@ SeSecurityPrivilege = *S-1-5-32-544,*$SID
     Test-FilePath ("$LocalDir\Exchange\{7EBB1837-C555-487F-86E7-27A9F707A086}\DomainSysvol\GPO\Machine\microsoft\windows nt\SecEdit\GptTmpl.inf")
     $DCXADGPOContent | Out-File "$LocalDir\Exchange\{7EBB1837-C555-487F-86E7-27A9F707A086}\DomainSysvol\GPO\Machine\microsoft\windows nt\SecEdit\GptTmpl.inf" -Force
 
-    # Import GPO(s)
     Import-Module GroupPolicy
-    $GPOs = @('DC-WS2019-Exchange')
-    foreach ($GPO in $GPOs) {Import-GPO -BackupGpoName $GPO -TargetName $GPO -Path "$LocalDir\Exchange" -CreateIfNeeded}
+    $GPOs = @('DC-WS2019-Exchange','SVR-WS2019-Exchange')
+    foreach ($GPO in $GPOs) 
+    {
+        Write-Host "Importing $GPO" -Foregroundcolor Green
+        Import-GPO -BackupGpoName $GPO -TargetName $GPO -Path "$LocalDir\Exchange" -CreateIfNeeded
+    }
 
     # Link GPO(s)
-    New-GPLink -Name "DC-WS2019-Exchange" -Target "OU=Domain Controllers,$LDAPDomain" -LinkEnabled Yes -Order 1
+    New-GPLink -Name "DC-WS2019-Exchange" -Target "OU=Domain Controllers,$LDAPDomain" -LinkEnabled Yes -Order 1 -ErrorAction SilentlyContinue
+    New-GPLink -Name "SVR-WS2019-Exchange" -Target "OU=Exchange,OU=T0-Servers,OU=Tier 0,OU=Admin,$LDAPDomain" -LinkEnabled Yes -Order 1 -ErrorAction SilentlyContinue
 
     # Perform GPUpdate on the DCs to apply new Exchange GPO setting
     $DCs = (Get-ADDomainController -Filter * | Select-Object Name | Sort-Object Name).Name
@@ -229,24 +219,6 @@ Function Test-XCert ($CertTemplate)
     $CertCheck = [bool] (Get-ChildItem Cert:\LocalMachine\My | ? {$_.Extensions.format(1)[0] -match "Template=$CertTemplate"})
     Write-Host $CertCheck
     return $CertCheck
-}
-
-Function Get-ADSchemaObjects
-{
-    # Exchange Schema Version
-    $sc = (Get-ADRootDSE).SchemaNamingContext
-    $ob = "CN=ms-Exch-Schema-Version-Pt," + $sc
-    Write-Output "RangeUpper: $((Get-ADObject $ob -pr rangeUpper).rangeUpper)"
-
-    # Exchange Object Version (domain)
-    $dc = (Get-ADRootDSE).DefaultNamingContext
-    $ob = "CN=Microsoft Exchange System Objects," + $dc
-    Write-Output "ObjectVersion (Default): $((Get-ADObject $ob -pr objectVersion).objectVersion)"
-
-    # Exchange Object Version (forest)
-    $cc = (Get-ADRootDSE).ConfigurationNamingContext
-    $fl = "(objectClass=msExchOrganizationContainer)"
-    Write-Output "ObjectVersion (Configuration): $((Get-ADObject -LDAPFilter $fl -SearchBase $cc -pr objectVersion).objectVersion)"
 }
 
 # =============================================================================
@@ -441,8 +413,9 @@ If ($Exchange.count -gt '0')
     Write-Host 'Obtaining New Certificate' -ForegroundColor Green
     If ((get-adgroup -identity "Web Servers").ObjectClass -eq "group") 
     {
+        $ExchangeFQDN = ([System.Net.DNS]::GetHostByName($env:computerName)).hostname
         Add-AdGroupMember -identity "Web Servers" -members $env:COMPUTERNAME$
-        $Certificate = Get-Certificate -Template $CertTemplate -DNSName $ExchangeMailURL -CertStoreLocation cert:\LocalMachine\My
+        $Certificate = Get-Certificate -Template $CertTemplate -DNSName $ExchangeMailURL,$ExchangeFQDN -CertStoreLocation cert:\LocalMachine\My
         $Certificate | FL
         Write-Host 'Binding Certificate to Exchange Services' -ForegroundColor Green
         Enable-ExchangeCertificate -thumbprint $Certificate.certificate.thumbprint -Services IIS,POP,IMAP,SMTP -confirm:$false -force
@@ -477,5 +450,19 @@ If(!($TestDNS2))
     Write-Host "The following DNS CNAME record was successfully created:" -ForegroundColor Yellow
     Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name "autodiscover" -RRType CName
 }
+
+# Test Exchange URL(s)
+Write-Host "Testing https://$ExchangeMailURL/owa" -ForegroundColor Green
+(Invoke-WebRequest https://$ExchangeMailURL/owa -UseBasicParsing).StatusDescription
+
+#Write-Host "Testing https://autodiscover.$DomainDnsName" -ForegroundColor Green
+#(Invoke-WebRequest https://autodiscover.$DomainDnsName -UseBasicParsing).StatusDescription
+
+# Test-OutlookConnectivity
+
+# Move server to OU to apply GPOs upon restart
+Write-Host "Moving $env:COMPUTERNAME to new OU to receive Group Policy"  -Foregroundcolor Green
+Get-ADComputer $env:COMPUTERNAME | Move-ADObject -TargetPath "OU=Exchange,OU=T0-Servers,OU=Tier 0,OU=Admin,$LDAPDomain" -Verbose
+(Get-ADComputer $env:COMPUTERNAME).DistinguishedName
 
 Stop-Transcript

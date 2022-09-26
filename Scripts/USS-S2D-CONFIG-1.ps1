@@ -105,7 +105,39 @@ Start-Sleep -Seconds 20
 # Remove IP Address from TEAMs.
 Get-netadapter TEAM_MGMT | get-netipaddress –addressfamily ipv4 | remove-netipaddress -Confirm:$false
 
-Start-Sleep -Seconds 10
+###################################################################################################
+# Check that the STORAGE/CLUSTER NICs are UP.
+#
+# If they are not up, SLEEP until they come up.
+#
+# For the direct connect NICs, whenever any one of the connected nodes are rebooting or offline, the NIC status changes from "UP" to "Disconnected".
+#
+# Note if the direct connect NICs (Storage/Cluster) are in the disconnected state the New-NetIPAddress command below will fail and
+# the IPAddress will not be set on the adapters.
+#
+# The New-NetIPAddress command will fail with the following error:
+#     + FullyQualifiedErrorId : Windows System Error 87,New-NetIPAddress
+#     New-NetIPAddress : Inconsistent parameters PolicyStore PersistentStore and Dhcp Enabled
+#
+# $NIC2STAT = Get-netadapter NIC_STOR2_25GB | Format-List Status
+$NIC1STAT = Get-netadapter NIC_STOR1_25GB
+$NIC2STAT = Get-netadapter NIC_STOR2_25GB
+
+If ((Get-netadapter NIC_STOR1_25GB).Status -ne 'UP') {
+   do {
+       Write-Host -foregroundcolor Red "The NIC_STOR1_25GB NIC is Disconnected..."
+       Start-Sleep 5
+   } until ((Get-netadapter NIC_STOR1_25GB).Status -eq 'UP')
+} Write-Host -foregroundcolor green "The NIC_STOR1_25GB is Up"
+
+
+If ((Get-netadapter NIC_STOR2_25GB).Status -ne 'UP') {
+   do {
+       Write-Host -foregroundcolor Red "The NIC_STOR2_25GB NIC is Disconnected..."
+       Start-Sleep 5
+   } until ((Get-netadapter NIC_STOR2_25GB).Status -eq 'UP')
+} Write-Host -foregroundcolor green "The NIC_STOR2_25GB is Up"
+
 
 ### Configure MGMT and STORAGE NICs ###############################################################
 If($NODENAME -eq $NODE1){
@@ -160,6 +192,9 @@ Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
 Install-WindowsFeature -Name Failover-Clustering –IncludeManagementTools
 Install-windowsfeature RSAT-Clustering –IncludeAllSubFeature
 
+###################################################################################################
+# Install BitLocker role and associated tools
+Install-WindowsFeature -Name BitLocker, RSAT-AD-Tools, GPMC -IncludeAllSubFeature -IncludeManagementTools
 
 ###################################################################################################
 ### Enable ALL File and Printer Sharing rule

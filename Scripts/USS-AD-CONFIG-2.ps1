@@ -1,63 +1,56 @@
-﻿
-##################### USS-AD-CONFIG-2.ps1 ############################################
-#
-# This script must be ran after the AD-CONFIG-1.ps1 is ran and the server has been rebooted.
-#
-### MDT will handle Reboots.
-#
-### This script will:
-#
-# -Install AD DS, DNS and GPMC - Add prerequisites (Windows Features) to build an Active Directory forest - 
-# -Create a New AD Forest and Add a Domain Controller - Using Install-ADDSForest.
-# -Enable Remote Desktop
-# -Stop/Prevent Server Manager from loading at startup
+﻿<#
+NAME
+    AD-CONFIG-2.ps1
 
-###################################################################################################
-### Start-Transcript
-# Stop-Transcript
-# Overwrite existing log.
-Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-AD-CONFIG-2.log
-Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-AD-CONFIG-2.log
+SYNOPSIS
+    Installs AD DS, DNS, and GPMC features for AD forest
+    Creates a new AD forest and adds a DC
+    Enables Remote Desktop and prevents Server Manager from loading at startup
 
-###################################################################################################
-# MODIFY/ENTER These Values
-#
-# ENTER New Forest name and DSRM Password.
-$domainname = “USS.LOCAL”
-$netbiosName = “USS”
-# Note the DSRM password ... Update it before running this script.
-$DSRMPASS = (ConvertTo-SecureString -String !QAZ2wsx#EDC4rfv -AsPlainText -Force)
+SYNTAX
+    .\$ScriptName
+ #>
 
+# Declare Variables
+# -----------------------------------------------------------------------------
+$ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
+$ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
+$DTG = Get-Date -Format yyyyMMddTHHmm
+$RootDir = Split-Path $ScriptDir –Parent
+$ConfigFile = "$RootDir\config.xml"
 
-###################################################################################################
-########## Add the Active Directory Domain Services role, the DNS Server role, and the Group Policy management feature
-# Add prerequisites (Windows Features) to build an Active Directory forest - Install AD DS, DNS and GPMC
-$featureLogPath = “c:\poshlog\featurelog.txt”
-start-job -Name addFeature -ScriptBlock {
-Add-WindowsFeature -Name “ad-domain-services” -IncludeAllSubFeature -IncludeManagementTools
-Add-WindowsFeature -Name “dns” -IncludeAllSubFeature -IncludeManagementTools
-Add-WindowsFeature -Name “gpmc” -IncludeAllSubFeature -IncludeManagementTools }
-Wait-Job -Name addFeature
-Get-WindowsFeature | Where installed >>$featureLogPath
+Start-Transcript -Path "$RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log"
+Start-Transcript -Path "$env:WINDIR\Temp\$env:COMPUTERNAME-$DTG-$ScriptName.log"
 
-Start-Sleep -s 60
+# Load variables from config.xml
+If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile Exiting..."} 
+$XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
+$WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
+$DomainDnsName = ($WS | ? {($_.Name -eq "DomainDnsName")}).Value
+$DomainName = ($WS | ? {($_.Name -eq "DomainName")}).Value
+$PKI = ($XML.Component | ? {($_.Name -eq "PKI")}).Settings.Configuration
+$RootCACred = ($PKI | ? {($_.Name -eq "RootCACred")}).Value
+$DSRMPASS = ConvertTo-SecureString -AsPlainText -Force -String $RootCACred
 
-################## Install New AD Forest #############################################################
-# Create New Forest, Add Domain Controller
+# =============================================================================
+# MAIN ROUTINE
+# =============================================================================
+
+# Add prerequisites (Windows Features) to build an Active Directory forest
+Add-WindowsFeature -Name "AD-Domain-Services,DNS,GPMC" -IncludeAllSubFeature -IncludeManagementTools
+
+# Install AD Forest
 Install-ADDSForest -CreateDnsDelegation:$false `
--DomainName $domainname `
+-DomainName $DomainDnsName `
 -SafeModeAdministratorPassword $DSRMPASS `
--DatabasePath “C:\Windows\NTDS” `
--DomainNetbiosName $netbiosName `
+-DatabasePath "C:\Windows\NTDS" `
+-DomainNetbiosName $DomainName `
 -ForestMode "7" `
 -DomainMode "7" `
 -LogPath "C:\Windows\NTDS" `
 -InstallDns:$true `
 -NoRebootOnCompletion:$true `
--SysvolPath “C:\Windows\SYSVOL” `
+-SysvolPath "C:\Windows\SYSVOL" `
 -Force:$true
-# Don't allow Install-ADDSForest reboot
-# Let MDT reboot the comupter..."-NoRebootOnCompletion:$true"
 
-###################################################################################################
 Stop-Transcript

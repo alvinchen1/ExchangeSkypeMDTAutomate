@@ -1,122 +1,71 @@
-﻿##################### USS-AD-CONFIG-4.ps1 ############################################
-# 
-# INSTALL AN ADDITIONAL DOMAIN CONTROLLER 
-#
-# This script must be ran after the AD-CONFIG-3.ps1 is ran.
-#
-### This script is designed to work with MDT.
-### MDT will set host name in OS.
-### MDT will handle Reboots.
-#
-### This script will:
-#
-# -Configure the MGMT NIC and set its IP Address and DNS Address.
-# -Install AD DS, DNS and GPMC
-# -Add an Additional domain controllers to an existing domain. - Using the ADDSDomainController command. 
-# -Enable Remote Desktop
-# -Stop/Prevent Server Manager from loading at startup
+﻿<#
+NAME
+    AD-CONFIG-4.ps1
 
-###################################################################################################
-### Start-Transcript
-# Stop-Transcript
-# Overwrite existing log.
-Start-Transcript -Path C:\Windows\Temp\MDT-PS-LOGS\USS-AD-CONFIG-4.log
-Start-Transcript -Path \\DEP-MDT-01\DEPLOY_SHARE_OFF$\LOGS\$env:COMPUTERNAME\USS-AD-CONFIG-4.log
+SYNOPSIS
+    Configures network adapter(s); installs an additional DC into the domain
 
-###################################################################################################
-# MODIFY/ENTER These Values
+SYNTAX
+    .\$ScriptName
+ #>
 
-### Enter the domain controller host names.
-# MDT will set host name in OS
-$DC1 = "USS-SRV-50"
-$DC2 = "USS-SRV-51"
+# Declare Variables
+# -----------------------------------------------------------------------------
+$ScriptName = Split-Path $MyInvocation.MyCommand.Path –Leaf
+$ScriptDir = Split-Path $MyInvocation.MyCommand.Path –Parent
+$DTG = Get-Date -Format yyyyMMddTHHmm
+$RootDir = Split-Path $ScriptDir –Parent
+$ConfigFile = "$RootDir\config.xml"
 
-### Set MGMT NIC IP Addresses
-$DC1_MGMT_IP = "10.1.102.50"
-$DC2_MGMT_IP = "10.1.102.51"
+Start-Transcript -Path "$RootDir\LOGS\$env:COMPUTERNAME\$ScriptName.log"
+Start-Transcript -Path "$env:WINDIR\Temp\$env:COMPUTERNAME-$DTG-$ScriptName.log"
 
-$DNS1 = "10.1.102.50"
-$DNS2 = "10.1.102.51"
-$DEFAULTGW = "10.1.102.1"
-$PREFIXLEN = "24" # Set subnet mask /24, /25
+# Load variables from config.xml
+If (!(Test-Path -Path $ConfigFile)) {Throw "ERROR: Unable to locate $ConfigFile Exiting..."} 
+$XML = ([XML](Get-Content $ConfigFile)).get_DocumentElement()
+$WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
+$Server = $Env:COMPUTERNAME
+$MgmtIP = ($WS | ? {($_.Name -eq "$Server")}).Value
+$DNS1 = ($WS | ? {($_.Role -eq "DC1")}).Value
+$DNS2 = ($WS | ? {($_.Role -eq "DC2")}).Value
+$DefaultGW = ($WS | ? {($_.Name -eq "DefaultGateway")}).Value
+$PrefixLen = ($WS | ? {($_.Name -eq "SubnetMaskBitLength")}).Value
+$DomainDnsName = ($WS | ? {($_.Name -eq "DomainDnsName")}).Value
+$DomainName = ($WS | ? {($_.Name -eq "DomainName")}).Value
+$MgmtNICName = "NIC_MGMT1_1GB"
+$PKI = ($XML.Component | ? {($_.Name -eq "PKI")}).Settings.Configuration
+$RootCACred = ($PKI | ? {($_.Name -eq "RootCACred")}).Value
+$DSRMPASS = ConvertTo-SecureString -AsPlainText -Force -String $RootCACred
 
-# Add additional Domain Controller
-$domainname = “USS.LOCAL”
-$netbiosName = “USS”
-# Note the DSRM password is Passw0rd99 ... Update it before running this script.
-$DSRMPASS = (ConvertTo-SecureString -String !QAZ2wsx#EDC4rfv -AsPlainText -Force)
+# =============================================================================
+# MAIN ROUTINE
+# =============================================================================
 
-### Get host name
-$HOSTNAME = HOSTNAME
+# Configure the MGMT NIC
+Write-Host -ForegroundColor Green "Configuring NIC(s)"
+If (Get-NetAdapter "Ethernet" -ErrorAction SilentlyContinue) {Rename-NetAdapter –Name "Ethernet" –NewName "$MgmtNICName"}
+Get-NetAdapter "$MgmtNICName" | Get-NetIPAddress -AddressFamily IPv4 | Remove-NetIPAddress -Confirm:$false
+Get-NetAdapter "$MgmtNICName" | New-NetIPAddress -IPAddress $MgmtIP -AddressFamily IPv4 -PrefixLength $PrefixLen -DefaultGateway $DefaultGW -Confirm:$false
+$MgmtNICIP = (Get-NetAdapter "$MgmtNICName" | Get-NetIPAddress -AddressFamily IPv4).IPAddress
+If ($MgmtNICIP -eq $DNS1) {Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses "127.0.0.1",$DNS2}
+ElseIf ($MgmtNICIP -eq $DNS2) {Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses "127.0.0.1",$DNS1}
+Else {Get-NetAdapter "$MgmtNICName" | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2}
+Disable-NetAdapterBinding "$MgmtNICName" -ComponentID ms_tcpip6
 
-
-###################################################################################################
-### Rename the NICs
-#
-Rename-NetAdapter –Name “Ethernet” –NewName “NIC_MGMT1_1GB”
-
-### Prepare MGMT NICs for New IP Address ##########################################################
-# Remove IP Address from TEAMs.
-Get-netadapter NIC_MGMT1_1GB | get-netipaddress –addressfamily ipv4 | remove-netipaddress -Confirm:$false
-
-
-### Configure MGMT NICs ###############################################################
-If($HOSTNAME -eq $DC1){
-### Set the MGMT NICs IP Addresses 
-# Host (USS-SRV-50)
-# write-host("Host Name is USS-SRV-50")
-#
-# Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $DC1_MGMT_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
-Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $DC1_MGMT_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
-
-}
-
-If($HOSTNAME -eq $DC2){
-### Set the MGMT NICs IP Addresses 
-# Host (USS-SRV-51)
-# write-host("Host Name is USS-SRV-51")
-#
-# Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $DC1_MGMT_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
-Get-netadapter NIC_MGMT1_1GB | New-NetIPAddress -IPAddress $DC2_MGMT_IP -AddressFamily IPv4 -PrefixLength $PREFIXLEN –defaultgateway $DEFAULTGW -Confirm:$false
-
-}
-
-### Set the MGMT NIC DNS Addresses
-# Get-NetAdapter TEAM_MGMT | Set-DnsClientServerAddress -ServerAddresses '10.1.102.50','10.1.102.51'
-Get-NetAdapter NIC_MGMT1_1GB | Set-DnsClientServerAddress -ServerAddresses $DNS1,$DNS2
-
-# Add the AD-Domain-Services role
-# Install AD DS, DNS and GPMC
-$featureLogPath = "c:\poshlog\featurelog.txt"
-New-Item $featureLogPath -ItemType file -Force
-start-job -Name addFeature -ScriptBlock {
-Add-WindowsFeature -Name “ad-domain-services” -IncludeAllSubFeature -IncludeManagementTools
-Add-WindowsFeature -Name “dns” -IncludeAllSubFeature -IncludeManagementTools
-Add-WindowsFeature -Name “gpmc” -IncludeAllSubFeature -IncludeManagementTools }
-Wait-Job -Name addFeature
-Get-WindowsFeature | Where installed >>$featureLogPath
-
-Start-Sleep -s 60
+# Add Windows Features to support Active Directory Directory Services (ADDS)
+Add-WindowsFeature -Name "AD-Domain-Services,DNS,GPMC" -IncludeAllSubFeature -IncludeManagementTools
 
 # Install ADDSDomainController for additional DC
 Install-ADDSDomainController -CreateDnsDelegation:$false `
--DomainName $domainname `
+-DomainName $DomainDnsName `
 -SafeModeAdministratorPassword $DSRMPASS `
--DatabasePath “C:\Windows\NTDS” `
+-DatabasePath "C:\Windows\NTDS" `
 -LogPath "C:\Windows\NTDS" `
 -InstallDns:$true `
 -NoRebootOnCompletion:$true `
--SysvolPath “C:\Windows\SYSVOL” `
+-SysvolPath "C:\Windows\SYSVOL" `
 -Force:$true `
 -NoGlobalCatalog:$false `
 -SiteName "Default-First-Site-Name"
 
- 
-# Don't reboot after install ... Let MDT reboot the comupter..."-NoRebootOnCompletion:$true"
-
-
-###################################################################################################
 Stop-Transcript
-
-
-### REBOOT SERVER

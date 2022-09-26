@@ -118,7 +118,11 @@ Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
 ###################################################################################################
 # Install Failover Cluster Manager roles.
 Install-WindowsFeature -Name Failover-Clustering –IncludeManagementTools
-Install-windowsfeature RSAT-Clustering –IncludeAllSubFeature
+Install-WindowsFeature RSAT-Clustering –IncludeAllSubFeature
+
+###################################################################################################
+# Install BitLocker role and associated tools
+Install-WindowsFeature -Name BitLocker, RSAT-AD-Tools, GPMC -IncludeAllSubFeature -IncludeManagementTools
 
 # <#
 # START COMMENT

@@ -114,16 +114,8 @@ Function Update-SQLInstance ($SQLInstance)
 If (Check-PendingReboot) {Write-Host "WARNING: Pending reboot on $env:COMPUTERNAME" -ForegroundColor Yellow}
 
 # Upgrade SQL Server 2016 instances to SQL Server 2019 and apply latest CU to instance (reboots required)
-Upgrade-SQLInstance ("RTC")
+#Upgrade-SQLInstance ("RTC")
 Upgrade-SQLInstance ("RTCLOCAL")
-Upgrade-SQLInstance ("LYNCLOCAL")
-
-# Update firewall rule(s) to reflect new SQL Server path
-Set-NetFirewallRule -DisplayName 'SQL RTC Access' -Program "C:\Program Files\Microsoft SQL Server\MSSQL15.RTC\MSSQL\Binn\sqlservr.exe" | Out-Null
-
-# Apply latest Cumulative Update (CU) to SQL Server 2019 instances
-#Update-SQLInstance ("RTC") # This will effectively update all remaining instances
-#Update-SQLInstance ("RTCLOCAL")
-#Update-SQLInstance ("LYNCLOCAL")
+#Upgrade-SQLInstance ("LYNCLOCAL")
 
 Stop-Transcript
