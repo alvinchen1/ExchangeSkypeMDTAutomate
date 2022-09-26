@@ -1,0 +1,58 @@
+
+trigger:
+- main
+
+stages:
+- stage: Deploy
+  jobs:
+  - deployment:
+    displayName: deploy to dev
+    pool: default
+    environment: Dev
+    variables:
+      adminServer: "USS-PA-01"
+      clusterNodes: "USS-PV-01,USS-PV-02"
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+          - task: PowerShell@2
+            displayName: USS-ADM-CONFIG-1
+            inputs:
+              failOnStderr: true
+              showWarnings: true
+              targetType: 'inline'
+              script: |
+                . .\Scripts\CommonCode.ps1
+                Invoke-Command -ComputerName $env:adminServer -FilePath .\Scripts\USS-ADM-CONFIG-1.ps1 -ArgumentList $config
+                Restart-ComputerOnLan -ComputerName $config.Servers.Admin.IP
+          - task: PowerShell@2
+            displayName: USS-ADM-CONFIG-2
+            inputs:
+              failOnStderr: true
+              showWarnings: true
+              targetType: 'inline'
+              script: |
+                . .\Scripts\CommonCode.ps1
+                Invoke-Command -ComputerName $env:adminServer -FilePath .\Scripts\USS-ADM-CONFIG-2.ps1 -ArgumentList $config
+          - task: PowerShell@2
+            displayName: Copy VHDX for USS-SRV-11/20
+            inputs:
+              failOnStderr: true
+              showWarnings: true
+              targetType: 'inline'
+              script: |
+                . .\Scripts\CommonCode.ps1
+                $vms = @($config.Servers.Admin.Name,$config.Servers.DPM.Name)
+                CopyVhdxTemplateWorkflow -FileShare "\\dev-ms-01\SimulatedFileServer" -DestinationFolder $env:adminServer -VmNames $vms
+          - task: PowerShell@2
+            displayName: USS-ADM-CREATE-VMs
+            inputs:
+              failOnStderr: true
+              showWarnings: true
+              targetType: 'inline'
+              workingDirectory: $(Build.SourcesDirectory)\Scripts
+              script: |
+                . .\Scripts\CommonCode.ps1
+                Invoke-Command -ComputerName $env:adminServer -FilePath .\Scripts\USS-ADM-CREATE-VMs.ps1 -ArgumentList $config
