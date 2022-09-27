@@ -1,10 +1,3 @@
-# Task Sequence
-See https://github.com/alvinchen1/OTCMDTAutomate/blob/main/Control/TaskSequences.docx for MDT TS export catalog to correlate scripted MDT flow in the XML
-Tip: TS ID in doc corresponds to folder name in the Control folder where one can see the flow in the XML
-Each subfolder should have a ts.xml that contains the logical flow of the TS
-Inside each ts.xml, relevant areas are lines with:
-     <action>cmd.exe /c start /wait powershell.exe -executionpolicy bypass -File "%SCRIPTROOT%\USS-*.ps1"</action>
-
 ### Hyper-V Admin Server: USS-PA-01
 - USS-OS-PREP-1.ps1
 - Reboot
@@ -200,3 +193,11 @@ Inside each ts.xml, relevant areas are lines with:
 - USS-OS-PREP-1.ps1
 - Reboot
 - USS-CARD-CONFIG-1.ps1
+
+# Task Sequence Reference
+See https://github.com/alvinchen1/OTCMDTAutomate/blob/main/Control/TaskSequences.docx for MDT Task Sequence (TS) export catalog to correlate scripted MDT flow in the XML.
+
+Tip: TS ID in doc corresponds to folder name in the Control folder where one can see the flow in the XML.
+
+Each subfolder should have a ts.xml that contains the logical flow of the TS. Inside each ts.xml, relevant areas are lines with:
+     <action>cmd.exe /c start /wait powershell.exe -executionpolicy bypass -File "%SCRIPTROOT%\USS-*.ps1"</action>
