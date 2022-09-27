@@ -13,13 +13,22 @@
 		<Configuration Name="DomainDistinguishedName" Value="DC=USS,DC=LOCAL"/>
 		<Configuration Name="DefaultGateway" Value="10.1.102.1"/>
 		<Configuration Name="SubnetMaskBitLength" Value="24"/>
+		<Configuration Name="USS-PA-01" Value="10.1.102.80" Role="HVAdmin" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
 		<Configuration Name="USS-SRV-50" Value="10.1.102.50" Role="DC1" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,AD-Domain-Services,DNS,RSAT-ADCS,NPAS"/>
 		<Configuration Name="USS-SRV-51" Value="10.1.102.51" Role="DC2" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,AD-Domain-Services,DNS,RSAT-ADCS,NPAS"/>
+		<Configuration Name="USS-SRV-52" Value="10.1.102.52" Role="MECM" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-53" Value="10.1.102.53" Role="DHCP" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
 		<Configuration Name="USS-SRV-54" Value="10.1.102.54" Role="WSUSCDP" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,Web-Server,Web-Dir-Browsing,ADCS-Online-Cert"/>
-		<Configuration Name="USS-SRV-55" Value="10.1.102.55" Role="IssuingCA" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,ADCS-Cert-Authority,RSAT-AD-PowerShell,GPMC"/>
-		<Configuration Name="USS-SRV-56" Value="10.1.102.56" Role="RootCA" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="SAT-SRV-57" Value="10.1.102.57" Role="Skype" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
-		<Configuration Name="SAT-SRV-59" Value="10.1.102.59" Role="Exchange" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,Server-Media-Foundation,NET-Framework-45-Features,RPC-over-HTTP-proxy,RSAT-Clustering,RSAT-Clustering-CmdInterface,RSAT-Clustering-Mgmt,RSAT-Clustering-PowerShell,WAS-Process-Model,Web-Asp-Net45,Web-Basic-Auth,Web-Client-Auth,Web-Digest-Auth,Web-Dir-Browsing,Web-Dyn-Compression,Web-Http-Errors,Web-Http-Logging,Web-Http-Redirect,Web-Http-Tracing,Web-ISAPI-Ext,Web-ISAPI-Filter,Web-Lgcy-Mgmt-Console,Web-Metabase,Web-Mgmt-Console,Web-Mgmt-Service,Web-Net-Ext45,Web-Request-Monitor,Web-Server,Web-Stat-Compression,Web-Static-Content,Web-Windows-Auth,Web-WMI,Windows-Identity-Foundation,RSAT-ADDS,RSAT-AD-PowerShell,GPMC,RSAT-DNS-Server"/>
+		<Configuration Name="USS-SRV-55" Value="10.1.102.55" Role="RootCA" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-56" Value="10.1.102.56" Role="IssuingCA" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,ADCS-Cert-Authority,RSAT-AD-PowerShell,GPMC"/>
+		<Configuration Name="USS-SRV-57" Value="10.1.102.57" Role="Skype" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-58" Value="10.1.102.58" Role="DPM" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-59" Value="10.1.102.59" Role="Exchange" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider,Server-Media-Foundation,NET-Framework-45-Features,RPC-over-HTTP-proxy,RSAT-Clustering,RSAT-Clustering-CmdInterface,RSAT-Clustering-Mgmt,RSAT-Clustering-PowerShell,WAS-Process-Model,Web-Asp-Net45,Web-Basic-Auth,Web-Client-Auth,Web-Digest-Auth,Web-Dir-Browsing,Web-Dyn-Compression,Web-Http-Errors,Web-Http-Logging,Web-Http-Redirect,Web-Http-Tracing,Web-ISAPI-Ext,Web-ISAPI-Filter,Web-Lgcy-Mgmt-Console,Web-Metabase,Web-Mgmt-Console,Web-Mgmt-Service,Web-Net-Ext45,Web-Request-Monitor,Web-Server,Web-Stat-Compression,Web-Static-Content,Web-Windows-Auth,Web-WMI,Windows-Identity-Foundation,RSAT-ADDS,RSAT-AD-PowerShell,GPMC,RSAT-DNS-Server"/>
+		<Configuration Name="USS-SRV-60" Value="10.1.102.60" Role="SolarDB" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-61" Value="10.1.102.61" Role="SolarW" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-62" Value="10.1.102.62" Role="KiwiWEC" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-63" Value="10.1.102.63" Role="NIFI" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
+		<Configuration Name="USS-SRV-64" Value="10.1.102.64" Role="CARD" Features="BitLocker,SNMP-Service,SNMP-WMI-Provider"/>
 	</Settings>
   </Component>
   <Component Name="PKI">
@@ -41,3 +50,4 @@
 	</Settings>
   </Component>
 </Installer>
+RootCA
