@@ -28,10 +28,11 @@ $TargetExchangePath = ($Exchange | ? {($_.Name -eq "TargetExchangePath")}).Value
 $ExchangeOrgName = ($Exchange | ? {($_.Name -eq "ExchangeOrgName")}).Value
 $ExchangeMailURL = ($Exchange | ? {($_.Name -eq "ExchangeMailURL")}).Value
 $WS = ($XML.Component | ? {($_.Name -eq "WindowsServer")}).Settings.Configuration
+$DomainName = ($WS | ? {($_.Name -eq "DomainName")}).Value
 $DomainDnsName = ($WS | ? {($_.Name -eq "DomainDnsName")}).Value 
 $InstallShare = ($WS | ? {($_.Name -eq "InstallShare")}).Value
 $ExchangePath = ($WS | ? {($_.Name -eq "InstallShare")}).Value + "\Exchange"
-$CertTemplate = ($WS | ? {($_.Name -eq "DomainName")}).Value + "WebServer"
+$CertTemplate = "$DomainName Web Server"
 $OWAVirtualDirectory = "https://" + $ExchangeMailURL + "/owa"
 $ECPVirtualDirectory = "https://" + $ExchangeMailURL + "/ecp"
 $OABVirtualDirectory = "https://" + $ExchangeMailURL + "/OAB"
@@ -99,10 +100,10 @@ Function Set-XADSchema
     
     If (!(Test-ADObject ("CN=ms-Exch-Schema-Version-Pt,CN=Schema,CN=Configuration,$LDAPDomain"))) 
     {
-        write-host "Extending Active Directory Schema" -Foregroundcolor green
+        Write-Host "Extending Active Directory Schema" -Foregroundcolor green
         Test-FilePath ("$ExchangePath\setup.exe")
         start-process "$ExchangePath\setup.exe" -Wait -NoNewWindow -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /ps"
-        write-host "Pausing for Schema replication" -Foregroundcolor green
+        Write-Host "Pausing for Schema replication" -Foregroundcolor green
         Start-Sleep -seconds 300
     }
     Else 
@@ -111,13 +112,13 @@ Function Set-XADSchema
         $ADSchema = Get-ItemProperty $ExchangeSchemaLocation -Name rangeUpper
         If ($ADSchema.rangeUpper -lt '16999') 
         {
-            write-host "Extending Active Directory Schema" -Foregroundcolor green
+            Write-Host "Extending Active Directory Schema" -Foregroundcolor green
             Test-FilePath ("$ExchangePath\setup.exe")
             start-process "$ExchangePath\setup.exe" -Wait -NoNewWindow -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /ps"
-            write-host "Pausing for Schema replication" -Foregroundcolor green
+            Write-Host "Pausing for Schema replication" -Foregroundcolor green
             Start-Sleep -seconds 300
         }
-        Else {write-host "Active Directory Schema already extended for Exchange 2019" -ForegroundColor Green}
+        Else {Write-Host "Active Directory Schema already extended for Exchange 2019" -ForegroundColor Green}
     }
 }
 
@@ -127,10 +128,10 @@ Function Set-XADPrep
     
     If (!(Test-ADObject ("CN=Microsoft Exchange System Objects,$LDAPDomain"))) 
     {
-        write-host "Preparing Active Directory for Exchange 2019" -Foregroundcolor green
+        Write-Host "Preparing Active Directory for Exchange 2019" -Foregroundcolor green
         Test-FilePath ("$ExchangePath\setup.exe")
         start-process "$ExchangePath\setup.exe" -Wait -NoNewWindow -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /PrepareAD /OrganizationName:$ExchangeOrgName"
-        write-host "Pausing for Active Directory replication" -Foregroundcolor green
+        Write-Host "Pausing for Active Directory replication" -Foregroundcolor green
         Start-Sleep -seconds 300
     }
     Else
@@ -141,17 +142,17 @@ Function Set-XADPrep
         {
             $ADExchangePrepped = "AD:\CN=Microsoft Exchange System Objects," + $LDAPDomain
             $ADExchangePreppedobjversion = Get-ItemProperty $ADExchangePrepped -Name objectVersion
-            If ($ADExchangePreppedobjversion.objectVersion -gt '13230') {write-host "Active Directory already Prepared for Exchange 2019" -ForegroundColor Green}
+            If ($ADExchangePreppedobjversion.objectVersion -gt '13230') {Write-Host "Active Directory already Prepared for Exchange 2019" -ForegroundColor Green}
             Else 
             {
-                write-host "Preparing Active Directory for Exchange 2019" -Foregroundcolor green
+                Write-Host "Preparing Active Directory for Exchange 2019" -Foregroundcolor green
                 Test-FilePath ("$ExchangePath\setup.exe")
                 start-process "$ExchangePath\setup.exe" -Wait -NoNewWindow -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /PrepareAD /OrganizationName:$ExchangeOrgName"
-                write-host "Pausing for Active Directory replication" -Foregroundcolor green
+                Write-Host "Pausing for Active Directory replication" -Foregroundcolor green
                 Start-Sleep -seconds 300
             }
         }
-        If ($ADSchema.rangeUpper -ge '16999') {write-host "Active Directory already Prepared for Exchange 2019" -ForegroundColor Green}
+        If ($ADSchema.rangeUpper -ge '16999') {Write-Host "Active Directory already Prepared for Exchange 2019" -ForegroundColor Green}
     }
 }
 
@@ -215,7 +216,7 @@ SeSecurityPrivilege = *S-1-5-32-544,*$SID
 
 Function Test-XCert ($CertTemplate)
 {
-    Write-Host "Checking if certificate derived from $CertTemplate is in local store"
+    Write-Host "Checking if certificate derived from $CertTemplate is in local store" -ForegroundColor Green
     $CertCheck = [bool] (Get-ChildItem Cert:\LocalMachine\My | ? {$_.Extensions.format(1)[0] -match "Template=$CertTemplate"})
     Write-Host $CertCheck
     return $CertCheck
@@ -241,23 +242,23 @@ Import-GPOs
 $Exchange = Get-Package  | ? {$_.Name -like "Microsoft Exchange Server"}
 If ($Exchange.count -eq '0' -and (!(Check-PendingReboot)))
 {
-    write-host "Installing Exchange 2019" -Foregroundcolor green
+    Write-Host "Installing Exchange 2019" -Foregroundcolor green
     Test-FilePath ("$ExchangePath\setup.exe")
     start-process "$ExchangePath\setup.exe" -Wait -NoNewWindow -Argumentlist " /IAcceptExchangeServerLicenseTerms_DiagnosticDataOFF /TargetDir:$TargetExchangePath /CustomerFeedbackEnabled:False /Mode:install /Roles:mb /OrganizationName:$ExchangeOrgName"
 }
 Else 
 {
-    write-host "Microsoft Exchange Server already installed or reboot needed" -ForegroundColor Green
+    Write-Host "Microsoft Exchange Server already installed or reboot needed" -ForegroundColor Green
 }
 
 $Exchange = Get-Package | ? {$_.Name -like "Microsoft Exchange Server*"}
 If ($Exchange.count -gt '0') 
 {
-    write-host "Checking for Exchange" -ForegroundColor Green
+    Write-Host "Checking for Exchange" -ForegroundColor Green
      
-    if ((get-module | ? {$_.Name -eq "RemoteExchange"}).count -eq 0) 
+    If ((get-module | ? {$_.Name -eq "RemoteExchange"}).count -eq 0) 
     {
-        write-host "Starting Exchange Management Shell" -ForegroundColor Green
+        Write-Host "Starting Exchange Management Shell" -ForegroundColor Green
         $TargetExchangePSPath = $TargetExchangePath + "\bin\RemoteExchange.ps1"
         Import-Module $TargetExchangePSPath
         Connect-ExchangeServer -auto -ClientApplication:ManagementShell
@@ -402,29 +403,10 @@ If ($Exchange.count -gt '0')
         Write-Host 'New Outlook Anywhere External Host Name' -ForegroundColor Red
         Get-OutlookAnywhere | fl ExternalURL
     }
-
-
-    # Check if certificate from 'DOMAIN Web Server' template successfully imported
-    #Test-XCert ("$DomainName Web Server")
-
-    ###### CHECK if there is a cert with the ExchangeURL?
-    ######
-    
-    Write-Host 'Obtaining New Certificate' -ForegroundColor Green
-    If ((get-adgroup -identity "Web Servers").ObjectClass -eq "group") 
-    {
-        $ExchangeFQDN = ([System.Net.DNS]::GetHostByName($env:computerName)).hostname
-        Add-AdGroupMember -identity "Web Servers" -members $env:COMPUTERNAME$
-        $Certificate = Get-Certificate -Template $CertTemplate -DNSName $ExchangeMailURL,$ExchangeFQDN -CertStoreLocation cert:\LocalMachine\My
-        $Certificate | FL
-        Write-Host 'Binding Certificate to Exchange Services' -ForegroundColor Green
-        Enable-ExchangeCertificate -thumbprint $Certificate.certificate.thumbprint -Services IIS,POP,IMAP,SMTP -confirm:$false -force
-        Get-ExchangeCertificate
-    }
 }
 Else 
 {
-    write-host "Exchange Not Installed" -Foregroundcolor green
+    Write-Host "Exchange Not Installed" -Foregroundcolor Green
 }
 
 # Create CNAMEs in DNS
@@ -451,14 +433,27 @@ If(!($TestDNS2))
     Get-DnsServerResourceRecord -ZoneName $DomainDnsName -ComputerName $DC -Name "autodiscover" -RRType CName
 }
 
+# Install cert
+If (!(Test-XCert ("$CertTemplate"))) 
+{
+    Write-Host "Installing certificate derived from $CertTemplate template" -ForegroundColor Green
+    $Template = $CertTemplate.Replace(" ","")
+    $ExchangeFQDN = ([System.Net.DNS]::GetHostByName($env:computerName)).hostname
+    $Certificate = Get-Certificate -Template $Template -DNSName $ExchangeFQDN,$ExchangeMailURL,autodiscover.$DomainDnsName -CertStoreLocation cert:\LocalMachine\My
+    $Certificate | fl
+    
+    Write-Host 'Binding Certificate to Exchange Services' -ForegroundColor Green
+    Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
+    Enable-ExchangeCertificate -thumbprint $Certificate.certificate.thumbprint -Services IIS,POP,IMAP,SMTP -confirm:$false -force
+    Get-ExchangeCertificate
+}
+
 # Test Exchange URL(s)
 Write-Host "Testing https://$ExchangeMailURL/owa" -ForegroundColor Green
 (Invoke-WebRequest https://$ExchangeMailURL/owa -UseBasicParsing).StatusDescription
 
-#Write-Host "Testing https://autodiscover.$DomainDnsName" -ForegroundColor Green
-#(Invoke-WebRequest https://autodiscover.$DomainDnsName -UseBasicParsing).StatusDescription
-
-# Test-OutlookConnectivity
+Write-Host "Testing https://autodiscover.$DomainDnsName" -ForegroundColor Green
+(Invoke-WebRequest https://autodiscover.$DomainDnsName -UseBasicParsing).StatusDescription
 
 # Move server to OU to apply GPOs upon restart
 Write-Host "Moving $env:COMPUTERNAME to new OU to receive Group Policy"  -Foregroundcolor Green
