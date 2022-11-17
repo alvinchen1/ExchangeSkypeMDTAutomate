@@ -1,0 +1,80 @@
+steps:
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet restore FedAware.Services.slnf'
+  inputs:
+    command: restore
+    projects: FedAware.Services.slnf
+    feedsToUse: 'select'
+    vstsFeed: GoLion/DasNuget
+    includeNuGetOrg: false
+    verbosityRestore: normal
+
+- task: VSBuild@1
+  displayName: 'VSBuild FedAware.Services.slnf'
+  inputs:
+    solution: FedAware.Services.slnf
+    platform: '$(BuildPlatform)'
+    configuration: '$(BuildConfiguration)'
+    msbuildArchitecture: x64
+    maximumCpuCount: true
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet publish FedAware.Services.slnf'
+  inputs:
+    command: publish
+    publishWebProjects: false
+    projects: 'FedAware.Services.slnf'
+    arguments: '--no-build -c $(BuildConfiguration) -f net6.0'
+
+- task: DockerCompose@0
+  displayName: 'Docker Compose build'
+  inputs:
+    containerregistrytype: 'Container Registry'
+    dockerRegistryEndpoint: $(DockerRegistryServiceEndpoint)
+    dockerComposeFile: 'docker-compose.yaml'
+    additionalDockerComposeFiles: 'docker-compose.simulators.yaml'
+    dockerComposeCommand: 'build --pull --parallel'
+    dockerComposeFileArgs: $(dockerComposeFileArgs)
+
+- task: DockerCompose@0
+  displayName: 'Docker Compose push'
+  inputs:
+    containerregistrytype: 'Container Registry'
+    dockerRegistryEndpoint: $(DockerRegistryServiceEndpoint)
+    dockerComposeFile: 'docker-compose.yaml'
+    additionalDockerComposeFiles: 'docker-compose.simulators.yaml'
+    dockerComposeCommand: push
+    dockerComposeFileArgs: $(dockerComposeFileArgs)
+
+- task: DockerCompose@0
+  displayName: 'Docker Compose down'
+  inputs:
+    containerregistrytype: 'Container Registry'
+    dockerRegistryEndpoint: $(DockerRegistryServiceEndpoint)
+    dockerComposeFile: 'docker-compose.yaml'
+    additionalDockerComposeFiles: 'docker-compose.simulators.yaml'
+    dockerComposeCommand: down --rmi local --remove-orphans
+    dockerComposeFileArgs: $(dockerComposeFileArgs)
+  condition: always()
+
+- powershell: "docker image prune -f"
+  displayName: 'Docker Image Prune'
+
+- task: CopyFiles@2
+  displayName: 'Copy Files to ComposeDrop'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)'
+    TargetFolder: '$(build.artifactstagingdirectory)\ComposeDrop'
+    Contents: |
+      baseservice.yaml
+      docker-compose.clearbuild.yaml
+      docker-compose.simulators.yaml
+      docker-compose.simulators.clearbuild.yaml
+      docker-compose.yaml
+      *.env
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact ComposeDrop'
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)\ComposeDrop'
+    ArtifactName: ComposeDrop

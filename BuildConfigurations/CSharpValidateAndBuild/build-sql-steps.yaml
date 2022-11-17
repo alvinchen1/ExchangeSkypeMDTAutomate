@@ -1,0 +1,59 @@
+steps:
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet restore FedAware.DataAccess.Setup'
+  inputs:
+    command: restore
+    projects: FedAware.DataAccess.Setup\FedAware.DataAccess.Setup.csproj
+    feedsToUse: 'select'
+    vstsFeed: GoLion/DasNuget
+    includeNuGetOrg: false
+    verbosityRestore: normal
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet build DataAccess.Setup'
+  inputs:
+    command: build
+    projects: FedAware.DataAccess.Setup\FedAware.DataAccess.Setup.csproj
+    arguments: '--no-restore -c $(BuildConfiguration)'
+
+- task: CopyFiles@2
+  displayName: 'Copy FedAware.DataAccess.Setup Files to EFDrop'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)\FedAware.DataAccess.Setup'
+    TargetFolder: '$(build.artifactstagingdirectory)\EFDrop\FedAware.DataAccess.Setup'
+    Contents: |        
+      FedAware.DataAccess.Setup.csproj
+      **\bin\**\!(*.pdb)
+      **\obj\**
+
+- task: CopyFiles@2
+  displayName: 'Copy DotNetEntityFrameworkUpdateDatabase.ps1 to EFDrop'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)\ContinuousDelivery'
+    TargetFolder: '$(build.artifactstagingdirectory)\EFDrop'
+    Contents: |        
+      DotNetEntityFrameworkUpdateDatabase.ps1
+
+- task: CopyFiles@2
+  displayName: 'Copy ContinuousDelivery Files to SqlDrop'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)'
+    TargetFolder: '$(build.artifactstagingdirectory)\SqlDrop'
+    flattenFolders: true
+    Contents: |
+      ContinuousDelivery\Script.Seed.sql
+      ContinuousDelivery\CreateDbIfNeeded.sql
+      ContinuousDelivery\CreateDatabase.ps1
+      ContinuousDelivery\UpdateDatabase.ps1
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact: SqlDrop'
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)\SqlDrop'
+    ArtifactName: SqlDrop
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact: EFDrop'
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)\EFDrop'
+    ArtifactName: EFDrop

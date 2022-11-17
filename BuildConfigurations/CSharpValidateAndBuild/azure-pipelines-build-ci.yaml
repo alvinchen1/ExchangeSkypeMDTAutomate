@@ -1,0 +1,32 @@
+resources:
+- repo: self
+
+trigger:
+- master
+
+jobs:
+- job: 'Build_Client_Installer'
+  pool: GoLion
+  variables:
+    appxPackageDir: '$(build.artifactStagingDirectory)\AppxPackages\\'
+  steps:
+  - template: build-clientslnf-steps.yaml
+
+- job: 'Build_Sql_Files'
+  pool: GoLion
+  steps:
+  - template: build-sql-steps.yaml
+
+- job: 'Build_And_Push_Docker_Services'
+  pool: GoLion
+  variables:
+    dockerComposeFileArgs: |
+      MassTransitMessageDataDir=DoesntMatterForBuildOnlyRelease
+      DasConnectionString=DoesntMatterForBuildOnlyRelease
+      MilestoneConnectionString=DoesntMatterForBuildOnlyRelease
+      DockerContainerRegistry=$(DockerRegistry)
+      DockerWin01CertPassword=DoesntMatterForBuildOnlyRelease
+      CheckAlertsGraphTimerIntervalInSeconds=DoesntMatterForBuildOnlyRelease
+      EnvFileName=docker.azure.env
+  steps:
+  - template: build-servicesslnf-steps.yaml

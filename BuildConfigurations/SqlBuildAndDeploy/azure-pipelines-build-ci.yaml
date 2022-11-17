@@ -1,0 +1,57 @@
+resources:
+- repo: self
+
+trigger:
+- master
+
+pool:
+  name: GoLion
+
+stages:
+- stage: ArtifactCreation
+  jobs:
+  - job: ArtifactCreation
+    steps:
+    - task: CopyFiles@2
+      displayName: Copy artifact files
+      inputs:
+        Contents: |
+          MaintenanceSolution-Deploy.ps1
+          sql\**
+        targetFolder: $(Build.ArtifactStagingDirectory)/OlaHallengrenDeployment
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: $(Build.ArtifactStagingDirectory)/OlaHallengrenDeployment
+        artifactName: OlaHallengrenDeployment
+
+- stage: Deployment
+  jobs:
+  - deployment: Deployment
+    displayName: Deploy DAS
+    pool:
+      name: GoLion
+    environment: DAS
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - template: azure-pipelines-build-template.yaml
+          - powershell: |
+              . $(Pipeline.Workspace)\OlaHallengrenDeployment\MaintenanceSolution-Deploy.ps1
+              InstallAndConfigureMaintenanceSolution `
+                -Computer $(Sql01FQDN) `
+                -BACKUP_SYSTEM_DATABASES_DIRECTORY "$(BACKUP_SYSTEM_DATABASES_DIRECTORY)" `
+                -BACKUP_USER_DATABASES_FULL_DIRECTORY "$(BACKUP_USER_DATABASES_FULL_DIRECTORY)" `
+                -BACKUP_USER_DATABASES_DIFF_DIRECTORY "$(BACKUP_USER_DATABASES_DIFF_DIRECTORY)" `
+                -BACKUP_USER_DATABASES_LOG_DIRECTORY "$(BACKUP_USER_DATABASES_LOG_DIRECTORY)"
+            displayName: Install Ola Scripts
+            failOnStderr: true
+          - powershell: |
+              . $(Pipeline.Workspace)\OlaHallengrenDeployment\MaintenanceSolution-Deploy.ps1
+              $pass = ConvertTo-SecureString $env:DSCUserPassword -AsPlainText -Force
+              $creds = New-Object System.Management.Automation.PSCredential("$(DSCUserName)", $pass)
+              RestartSqlService -Computer $(Sql01FQDN) -Creds $creds
+            env:
+              DSCUserPassword: $(DSCUserPassword)
+            displayName: Restart Sql Service
+            failOnStderr: true

@@ -1,0 +1,8 @@
+steps:
+- task: DownloadPackage@1
+  displayName: Downloading SqlServer Module
+  inputs:
+    feed: GoLion/DasPowershell
+    definition: SqlServer
+    version: latest
+    downloadPath: 'C:\Program Files\WindowsPowerShell\Modules\SqlServer'

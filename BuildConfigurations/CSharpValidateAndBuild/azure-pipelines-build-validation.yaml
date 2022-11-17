@@ -1,0 +1,125 @@
+resources:
+- repo: self
+
+trigger:
+- master
+
+pr: # will trigger on PR
+  branches:
+    include: [ master ] # branch names which will trigger a build
+
+pool:
+  name: GoLion
+  demands:
+  - msbuild
+  - visualstudio
+
+variables:
+  dockerComposeFileArgs: |
+    MassTransitMessageDataDir=DoesntMatterForBuildOnlyRelease
+    DasConnectionString=DoesntMatterForBuildOnlyRelease
+    MilestoneConnectionString=DoesntMatterForBuildOnlyRelease
+    DockerContainerRegistry=$(DockerRegistry)
+    DockerWin01CertPassword=DoesntMatterForBuildOnlyRelease
+    CheckAlertsGraphTimerIntervalInSeconds=DoesntMatterForBuildOnlyRelease
+    EnvFileName=docker.azure.env
+
+steps:
+# This test ensures all services with clear build files are valid
+# Tests that "docker-compose pull/up" will succeed on non build machines
+- task: DockerCompose@0
+  displayName: 'Compose Clearbuild Test'
+  inputs:
+    containerregistrytype: 'Container Registry'
+    dockerRegistryEndpoint: $(DockerRegistryServiceEndpoint)
+    dockerComposeFile: 'docker-compose.yaml'
+    additionalDockerComposeFiles: |
+      docker-compose.clearbuild.yaml
+      docker-compose.simulators.yaml
+      docker-compose.simulators.clearbuild.yaml
+      docker-compose.rabbit.yaml
+    dockerComposeFileArgs: $(dockerComposeFileArgs)
+    dockerComposeCommand: config
+
+- task: DotNetCoreCLI@2
+  displayName: 'Remove installer project'
+  inputs:
+    command: custom
+    custom: sln
+    arguments: 'FedAware.sln remove FedAware.Client.Installer\FedAware.Client.Installer.wapproj'
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet restore'
+  inputs:
+    command: restore
+    projects: FedAware.sln
+    feedsToUse: 'select'
+    vstsFeed: GoLion/DasNuget
+    includeNuGetOrg: false
+    verbosityRestore: normal
+
+# Build the two solution filters to ensure they are up to date
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet build FedAware.Client.slnf' # The displayName is used in the BuildQualityChecks warningTaskFilters
+  inputs:
+    command: build
+    projects: FedAware.Client.slnf
+    arguments: '--no-restore'
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet build FedAware.Services.slnf' # The displayName is used in the BuildQualityChecks warningTaskFilters
+  inputs:
+    command: build
+    projects: FedAware.Services.slnf
+    arguments: '--no-restore'
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet build FedAware.sln' # The displayName is used in the BuildQualityChecks warningTaskFilters
+  inputs:
+    command: build
+    projects: FedAware.sln
+    arguments: '--no-restore'
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet test'
+  inputs:
+    command: test
+    projects: FedAware.sln
+    publishTestResults: true
+    arguments: '--no-build --settings $(Build.SourcesDirectory)\CodeCoverage.runsettings'
+
+- task: PublishTestResults@2
+  inputs:
+    testResultsFormat: 'VSTest'
+    mergeTestResults: true
+    testResultsFiles: '$(Agent.TempDirectory)/*.trx'    
+
+- task: BuildQualityChecks@8
+  displayName: 'Check Build Quality'
+  inputs:
+    checkWarnings: true
+    showStatistics: true
+    warningTaskFilters: '/^dotnet build/i'
+    checkCoverage: true
+    allowCoverageVariance: true
+    coverageVariance: 1.0
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet publish services solution filter'
+  inputs:
+    command: publish
+    projects: FedAware.Services.slnf
+    publishWebProjects: false
+    arguments: '--framework net6.0 --no-build'
+
+# This test ensures all services were published
+# Tests that "docker-compose build" will succeed
+- task: DockerCompose@0
+  displayName: 'Docker Compose config'
+  inputs:
+    containerregistrytype: 'Container Registry'
+    dockerRegistryEndpoint: $(DockerRegistryServiceEndpoint)
+    dockerComposeFile: 'docker-compose.yaml'
+    additionalDockerComposeFiles: 'docker-compose.simulators.yaml'
+    dockerComposeFileArgs: $(dockerComposeFileArgs)
+    dockerComposeCommand: config

@@ -1,0 +1,80 @@
+steps:
+- task: DownloadSecureFile@1
+  name: caCertificate
+  displayName: 'Download CA Certificate'
+  inputs:
+    secureFile: 'CodeSigningCert.pfx'
+
+- powershell: |
+    $buildRegex = '(\d{4})(\d{2})(\d{2})\.(\d+)'
+    $match = [regex]::Match($(Build.BuildNumber), $buildRegex)
+    if(!$match.Success) { exit 1 }
+    
+    $year = $match.Groups[1]
+    $month = $match.Groups[2].Value.TrimStart('0')
+    $day = $match.Groups[3].Value.TrimStart('0')
+    $rep = $match.Groups[4]
+    $version = "$year.$month.$day.$rep"
+    
+    $manifestFiles = Get-ChildItem Package.appxmanifest -Recurse
+    foreach($file in $manifestFiles)
+    {
+        Write-Host "Replacing version with $version in $file"
+        (Get-Content $file) -replace '(\s)Version="\d+\.\d+\.\d+\.\d+"', "`$1Version=`"$version`"" | Out-File $file -Encoding UTF8
+    }
+    
+    # This sets a build variable called clientversion that other tasks can use
+    Write-Host "##vso[task.setvariable variable=clientversion;isOutput=true]$version"
+  displayName: 'Replace Version w/ BuildNumber'
+  name: versionbuilder
+
+- task: PowerShell@2
+  displayName: 'Set Client Installer Title Powershell Script'
+  inputs:
+    filePath: '.\ContinuousIntegration\SetClientInstallerTitle.ps1'
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet restore installer proj'
+  inputs:
+    command: restore
+    projects: FedAware.sln
+    feedsToUse: 'select'
+    vstsFeed: GoLion/DasNuget
+    includeNuGetOrg: false
+    verbosityRestore: normal
+
+- task: VSBuild@1
+  displayName: 'VSBuild Build Installer Proj'
+  inputs:
+    solution: FedAware.Client.Installer\FedAware.Client.Installer.wapproj
+    platform: x64
+    configuration: '$(BuildConfiguration)'
+    msbuildArchitecture: x64
+    maximumCpuCount: true
+    msbuildArgs: >-
+      /p:AppxBundle=Always
+      /p:AppxBundlePlatforms=x64
+      /p:AppxPackageSigningEnabled=false
+      /p:AppxPackageDir="$(appxPackageDir)"
+
+- powershell: |
+    if('$(BuildConfiguration)' -eq 'Debug'){
+      &"C:\Program Files (x86)\Windows Kits\10\App Certification Kit\signtool.exe" sign /f "$(caCertificate.secureFilePath)" /p "$(CodeSigningCertPassword)" /fd SHA256 /a $(appxPackageDir)\FedAware.Client.Installer_$(versionbuilder.clientversion)_Debug_Test\FedAware.Client.Installer_$(versionbuilder.clientversion)_x64_Debug.msixbundle
+    } else {
+      &"C:\Program Files (x86)\Windows Kits\10\App Certification Kit\signtool.exe" sign /f "$(caCertificate.secureFilePath)" /p "$(CodeSigningCertPassword)" /fd SHA256 /a $(appxPackageDir)\FedAware.Client.Installer_$(versionbuilder.clientversion)_Test\FedAware.Client.Installer_$(versionbuilder.clientversion)_x64.msixbundle
+    }      
+  displayName: 'Sign AppXPackage'
+
+- task: CopyFiles@2
+  displayName: 'Copy Powershell Script to ClientInstallerDrop'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)'
+    TargetFolder: '$(appxPackageDir)'
+    Contents: ContinuousDelivery\FedAware.Client.Installer.ps1
+    FlattenFolders: true
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact: ClientInstaller'
+  inputs:
+    PathtoPublish: '$(appxPackageDir)'
+    ArtifactName: ClientInstallerDrop
